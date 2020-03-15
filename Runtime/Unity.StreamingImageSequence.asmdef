@@ -1,0 +1,26 @@
+{
+    "name": "Unity.StreamingImageSequence",
+    "references": [
+        "GUID:f06555f75b070af458a003d92f9efb00",
+        "GUID:02f771204943f4a40949438e873e3eff"
+    ],
+    "includePlatforms": [
+        "Editor",
+        "macOSStandalone",
+        "WindowsStandalone64"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.unity.timeline",
+            "expression": "1.4.0-preview",
+            "define": "TIMELINE_NEWER_THAN_1_4_0"
+        }
+    ],
+    "noEngineReferences": false
+}
