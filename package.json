@@ -2,7 +2,7 @@
   "displayName": "Streaming Image Sequence",
   "name": "com.unity.streaming-image-sequence",
   "unity": "2019.2",
-  "version": "0.0.3-preview",
+  "version": "0.0.4-preview",
   "dependencies": {},
   "description": "Streaming Image Sequence is a package for playing sequential image sequences in Unity Timeline easily without making Unity 2D Sprites.",
   "author": "Unity Technology Japan",
@@ -12,9 +12,9 @@
     "Hiroki Omae <hiroki@unity3d.com> (https://github.com/hiroki-o)"
   ],
   "repository": {
-    "footprint": "5bca5aa1b743b4fca7aa40f531108a3569f90239",
+    "footprint": "1e2581bee34e4066c54978a983e24adceee49483",
     "type": "git",
     "url": "https://github.com/unity3d-jp/StreamingImageSequence.git",
-    "revision": "ee4be199d1dcd7a324cbdf01f51d5177a768340e"
+    "revision": "d0170999ac6fabb8eb74f5bae878f21e0dd3af09"
   }
 }
