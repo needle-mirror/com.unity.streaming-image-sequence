@@ -36,6 +36,7 @@ namespace UnityEditor.StreamingImageSequence {
             
             EditorGUI.BeginChangeCheck();
             serializedObject.Update();
+            Undo.RecordObject(m_asset, "StreamingImageSequencePlayableAssetInspector::OnInspectorGUI");
 
             using (new EditorGUILayout.VerticalScope (GUI.skin.box))  {
                 EditorGUILayout.LabelField("Version",  $"{m_asset.GetVersion() }", "BoldLabel");
@@ -49,6 +50,8 @@ namespace UnityEditor.StreamingImageSequence {
                 GUILayout.Space(4f);
 
             }
+
+            
             GUILayout.Space(4f);
 
             using (new EditorGUILayout.VerticalScope(GUI.skin.box))
@@ -78,10 +81,11 @@ namespace UnityEditor.StreamingImageSequence {
                 
             }
             
-            //if (GUILayout.Button("Reset Markers")) {
-            //    //[TODO-sin:2020-2-7] Support undo for this
-            //    m_asset.ResetMarkers();
-            //}
+            GUILayout.Space(15);
+            m_asset.SetUseImageMarkerVisibility(GUILayout.Toggle(m_asset.GetUseImageMarkerVisibility(), "Show UseImageMarkers"));
+            if (GUILayout.Button("Reset UseImageMarkers")) {
+                m_asset.ResetPlayableFrames();
+            }
 
             serializedObject.ApplyModifiedProperties();
             EditorGUI.EndChangeCheck();
