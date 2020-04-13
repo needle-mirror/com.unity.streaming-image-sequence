@@ -2,7 +2,7 @@
   "displayName": "Streaming Image Sequence",
   "name": "com.unity.streaming-image-sequence",
   "unity": "2019.2",
-  "version": "0.1.1-preview",
+  "version": "0.1.2-preview",
   "dependencies": {
     "com.unity.timeline": "1.2.14"
   },
@@ -14,9 +14,9 @@
     "Hiroki Omae <hiroki@unity3d.com> (https://github.com/hiroki-o)"
   ],
   "repository": {
-    "footprint": "3c1f55fee3414fc486efea1869df5656a519b3d0",
+    "footprint": "6b90568db0fb21097bd830f35c1bad89593268b9",
     "type": "git",
     "url": "https://github.com/unity3d-jp/StreamingImageSequence.git",
-    "revision": "7150fefda701699c8e88f8fd9310b10a0ab1aaba"
+    "revision": "497993932e4efac959c0a1b95b52bd177f96a3fa"
   }
 }
