@@ -5,8 +5,8 @@ namespace UnityEngine.StreamingImageSequence {
 //----------------------------------------------------------------------------------------------------------------------
 
 [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode, Pack = 8)]
-internal struct ReadResult {
-    public IntPtr Buffer;
+internal struct ImageData {
+    public IntPtr RawData;
     [MarshalAs(UnmanagedType.I4)]
     public readonly int Width;
     [MarshalAs(UnmanagedType.I4)]
