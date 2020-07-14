@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using UnityEngine.Assertions;
 using UnityEngine.Playables;
 using UnityEngine.Timeline;
 
@@ -7,6 +8,13 @@ namespace UnityEngine.StreamingImageSequence {
 // A PlayableBehaviour that is attached to a Track via CreateTrackMixer() 
 internal abstract class BasePlayableMixer<T> : PlayableBehaviour where T: PlayableAsset {
 
+    #region IPlayableBehaviour interfaces
+    
+    public override void OnPlayableDestroy(Playables.Playable playable) {
+        base.OnPlayableDestroy(playable);
+        Destroy();
+    }
+    
     public override void PrepareFrame(Playable playable, FrameData info) {
         base.PrepareFrame(playable, info);
         if (null == m_boundGameObject)
@@ -14,6 +22,7 @@ internal abstract class BasePlayableMixer<T> : PlayableBehaviour where T: Playab
 
         m_boundGameObject.SetActive(false); //Always hide first, and show it later 
     }
+    
 
 //----------------------------------------------------------------------------------------------------------------------
     // Called each frame while the state is set to Play
@@ -27,7 +36,7 @@ internal abstract class BasePlayableMixer<T> : PlayableBehaviour where T: Playab
             return;
         }
         
-        GetActiveTimelineClipInto(m_clips, m_playableDirector.time, out TimelineClip clip, out T activePlayableAsset);
+        GetActiveTimelineClipInto(m_clipAssets, m_playableDirector.time, out TimelineClip clip, out T activePlayableAsset);
         if (null == clip)
             return;
         
@@ -36,6 +45,8 @@ internal abstract class BasePlayableMixer<T> : PlayableBehaviour where T: Playab
         
     }
 
+    #endregion IPlayableBehaviour interfaces
+    
 //----------------------------------------------------------------------------------------------------------------------
 
     public static void GetActiveTimelineClipInto( IEnumerable<TimelineClip> clips, double directorTime, 
@@ -58,13 +69,46 @@ internal abstract class BasePlayableMixer<T> : PlayableBehaviour where T: Playab
     }
 
 //----------------------------------------------------------------------------------------------------------------------
+    private static void GetActiveTimelineClipInto( IDictionary<TimelineClip, T> clipAssets, double directorTime, 
+        out TimelineClip outClip, out T outAsset) {
+        
+        foreach (KeyValuePair<TimelineClip, T> clipAsset in clipAssets) {
+            TimelineClip clip = clipAsset.Key;
+            T asset = clipAsset.Value;
+
+            if ( directorTime >= clip.start && directorTime <= clip.end) {
+                outClip  = clip;
+                outAsset = asset;
+                return;
+            }
+        }
+
+        outClip  = null;
+        outAsset = null;
+    }
+//----------------------------------------------------------------------------------------------------------------------
 
     internal void Init(GameObject go, PlayableDirector director, IEnumerable<TimelineClip> clips) {
         m_boundGameObject = go;
         m_playableDirector = director;
-        m_clips = clips;
+        
+        m_clips = new List<TimelineClip>(clips);
+        m_clipAssets = new Dictionary<TimelineClip, T>();
+        foreach (var clip in m_clips) {
+            T clipAsset = clip.asset as T;
+            Assert.IsNotNull(clipAsset);
+            m_clipAssets.Add(clip, clipAsset);
+        }
+        
 
         InitInternalV(go);
+    }
+    
+//----------------------------------------------------------------------------------------------------------------------
+    internal void Destroy() {
+        m_clips.Clear();
+        m_clipAssets.Clear();
+        
     }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -79,12 +123,14 @@ internal abstract class BasePlayableMixer<T> : PlayableBehaviour where T: Playab
     protected GameObject GetBoundGameObject() { return m_boundGameObject; }
     protected PlayableDirector GetPlayableDirector() { return m_playableDirector; }
     protected IEnumerable<TimelineClip> GetClips() { return m_clips; }
+    internal IEnumerable<KeyValuePair<TimelineClip,T>> GetClipAssets() { return m_clipAssets; }
 
 //----------------------------------------------------------------------------------------------------------------------
 
     private GameObject m_boundGameObject;
     private PlayableDirector m_playableDirector;
-    private IEnumerable<TimelineClip> m_clips;
+    private List<TimelineClip> m_clips;
+    private Dictionary<TimelineClip, T> m_clipAssets;
 
 }
 

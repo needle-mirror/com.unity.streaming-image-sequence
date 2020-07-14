@@ -1,11 +1,7 @@
 ﻿using System.Collections.Generic;
-using System;
 using UnityEngine.Playables;
 using UnityEngine.UI;
 using UnityEngine.Timeline;
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
 
 namespace UnityEngine.StreamingImageSequence
 {
@@ -15,85 +11,99 @@ namespace UnityEngine.StreamingImageSequence
 
 
         public StreamingImageSequencePlayableMixer() {
-
-#if UNITY_EDITOR
-            System.Reflection.Assembly assembly = typeof(UnityEditor.EditorWindow).Assembly;
-            Type type = assembly.GetType("UnityEditor.GameView");
-            m_gameView = EditorWindow.GetWindow(type,false,null,false);
-
-#endif
         }
 
         
 //----------------------------------------------------------------------------------------------------------------------
 
 #region IPlayableBehaviour interfaces
+
         public override void OnPlayableCreate(Playable playable) {
+#if UNITY_EDITOR            
+            m_editorUpdateTask = new SISPlayableMixerEditorUpdateTask(this);
+            EditorUpdateManager.AddEditorUpdateTask( m_editorUpdateTask);
+#endif //UNITY_EDITOR          
+           
         }
 
         public override void OnPlayableDestroy(Playable playable) {
+            
+            var clipAssets = GetClipAssets();
+            foreach (KeyValuePair<TimelineClip, StreamingImageSequencePlayableAsset> kv in clipAssets) {
+                StreamingImageSequencePlayableAsset sisAsset = kv.Value;
+                sisAsset.OnPlayableDestroy(playable);
+            }
+            
+            base.OnPlayableDestroy(playable);
+            
+#if UNITY_EDITOR            
+            EditorUpdateManager.RemoveEditorUpdateTask( m_editorUpdateTask);        
+#endif //UNITY_EDITOR          
         }
 
+        
 //----------------------------------------------------------------------------------------------------------------------
-        public override void OnGraphStart(Playable playable){
-            
-            
-            foreach (TimelineClip clip in GetClips()) {
+        public override void OnGraphStart(Playable playable) {
+            //Need to bind TimelineClips first
+            IEnumerable<TimelineClip> clips = GetClips();           
+            foreach (TimelineClip clip in clips) {
                 StreamingImageSequencePlayableAsset asset = clip.asset as StreamingImageSequencePlayableAsset;
                 if (null == asset)
                     continue;
-                asset.OnGraphStart(playable);
+                asset.BindTimelineClip(clip);
             }
             
+            var clipAssets = GetClipAssets();
+            foreach (KeyValuePair<TimelineClip, StreamingImageSequencePlayableAsset> kv in clipAssets) {
+                StreamingImageSequencePlayableAsset sisAsset = kv.Value;                
+                sisAsset.OnGraphStart(playable);                
+            }
+        }
 
+//----------------------------------------------------------------------------------------------------------------------
+        public override void OnGraphStop(Playable playable) {
+            
+            var clipAssets = GetClipAssets();
+            foreach (KeyValuePair<TimelineClip, StreamingImageSequencePlayableAsset> kv in clipAssets) {
+                StreamingImageSequencePlayableAsset sisAsset = kv.Value;                
+                sisAsset.OnGraphStop(playable);
+                sisAsset.BindTimelineClip(null);
+            }
+            
         }
         
 //----------------------------------------------------------------------------------------------------------------------
-        public override void ProcessFrame(Playable playable, FrameData info, object playerData)
-        {
-            int inputCount = playable.GetInputCount<Playable>();
-            if (inputCount == 0) {
-                return; // it doesn't work as mixer.
+        public override void ProcessFrame(Playable playable, FrameData info, object playerData) {
+            
+            base.ProcessFrame(playable, info, playerData); // Calls ProcessActiveClipV()
+
+#if UNITY_EDITOR            
+            if (!Application.isPlaying) {
+                return;
             }
+#endif            
+            
+            //Preload images here only in play mode
+            double directorTime = GetPlayableDirector().time;            
+            var clipAssets = GetClipAssets();
+            foreach (KeyValuePair<TimelineClip, StreamingImageSequencePlayableAsset> kv in clipAssets) {
+                TimelineClip clip = kv.Key;
+                StreamingImageSequencePlayableAsset sisAsset = kv.Value;
 
-            double directorTime = GetPlayableDirector().time;
-
-            bool activeTimelineClipFound = false;
-            int i = 0;
-            foreach (TimelineClip clip in GetClips()) {
-
-                StreamingImageSequencePlayableAsset asset = clip.asset as StreamingImageSequencePlayableAsset;
-                if (null == asset)
-                    continue;
-
-                IList<string> imagePaths = asset.GetImagePaths();
-                if (null == imagePaths)
+                IList<string> imagePaths = sisAsset.GetImageFileNames();
+                if (null == imagePaths || null == clip.parentTrack)
                     continue;
 
                 double startTime = clip.start;
                 double endTime = clip.end;
-
                 double loadStartOffsetTime = 1.0f + imagePaths.Count * 0.1f;
 
                 //Start to preload images before the clip is active
                 if ( directorTime>= startTime - loadStartOffsetTime && directorTime < endTime) {
-                    asset.ContinuePreloadingImages();                    
+                    sisAsset.ContinuePreloadingImages();                    
                 }
 
-                if (!activeTimelineClipFound && directorTime >= startTime && directorTime < endTime) {
-                    ProcessActiveClipV(asset, directorTime, clip);
-                    activeTimelineClipFound = true;
-                } 
-
-                ++i;
             }
-
-            //Show game object
-            GameObject go = GetBoundGameObject();
-            if (activeTimelineClipFound && null != go) {
-                go.SetActive(true);
-            }
-            
 
         }
 
@@ -104,17 +114,14 @@ namespace UnityEngine.StreamingImageSequence
         protected override void ProcessActiveClipV(StreamingImageSequencePlayableAsset asset,
             double directorTime, TimelineClip activeClip) 
         {
-            int index = asset.GlobalTimeToImageIndex(directorTime);
-
+            IList<string> imagePaths = asset.GetImageFileNames();
+            if (null == imagePaths || null == activeClip.parentTrack)
+                return;
+            
+            int index = asset.GlobalTimeToImageIndex(activeClip, directorTime);
             bool texReady = asset.RequestLoadImage(index);
             if (texReady) {
                 UpdateRendererTexture(asset);
-
-#if UNITY_EDITOR
-                if (!EditorApplication.isPlaying) {
-                    m_gameView.Repaint();
-                }
-#endif
             }
 
         }
@@ -177,7 +184,7 @@ namespace UnityEngine.StreamingImageSequence
         private Image           m_image = null;
 
 #if UNITY_EDITOR
-        readonly EditorWindow m_gameView;
+        SISPlayableMixerEditorUpdateTask m_editorUpdateTask;        
 #endif
 
     }

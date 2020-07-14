@@ -47,31 +47,21 @@ namespace UnityEditor.StreamingImageSequence {
 
 //----------------------------------------------------------------------------------------------------------------------
 
-        /*
-
-        [MenuItem(StreamingImageSequenceConstants.MENU_PATH + "Create MovieProxy/Register files", false, 6)]
-        static void ImportAndCreateSpriteAnimation()
-        {
-            importPictureFiles(PictureFileImporterParam.Mode.SpriteAnimation);
-
-        }
-        */
-
         [MenuItem(StreamingImageSequenceConstants.MENU_PATH + "Reset",false,50)]
         static void Reset()
         {
-            UpdateManager.ResetPlugin();
-            PreviewTextureFactory.Reset();
+            EditorUpdateManager.ResetImageLoading();
+            PreviewTextureFactory.Reset();            
         }
 
 
 //----------------------------------------------------------------------------------------------------------------------
-        [MenuItem(StreamingImageSequenceConstants.MENU_PATH + "Show Loaded Images",false,52)]
+        [MenuItem(StreamingImageSequenceConstants.MENU_PATH + "Debug/Show Loaded Images",false,52)]
         static void ShowLoadedImages() {
             StringBuilder sb = new StringBuilder();
 
             for (int imageType = 0; imageType < StreamingImageSequenceConstants.MAX_IMAGE_TYPES; ++imageType) {
-                sb.AppendLine("TEXTURE_TYPE: " + imageType.ToString());
+                sb.AppendLine("IMAGE_TYPE: " + imageType.ToString());
 
                 List<string> loadedTextures = new List<string>();
                 StreamingImageSequencePlugin.ListLoadedImages(imageType, (fileName) => {
@@ -79,8 +69,7 @@ namespace UnityEditor.StreamingImageSequence {
                 });
 
                 foreach (var fileName in loadedTextures) {
-                    StreamingImageSequencePlugin.GetImageDataInto(fileName,imageType, Time.frameCount, 
-                        out ImageData readResult);
+                    ImageLoader.GetImageDataInto(fileName,imageType, out ImageData readResult);
                     sb.Append("    ");
                     sb.Append(fileName);
                     sb.Append(". Status: " + readResult.ReadStatus);
@@ -95,6 +84,24 @@ namespace UnityEditor.StreamingImageSequence {
             Debug.Log(sb.ToString());
         }
 
+        [MenuItem(StreamingImageSequenceConstants.MENU_PATH + "Debug/Show Used Image Memory",false,53)]
+        static void ShowUsedImageMemory() {
+            Debug.Log($"Used memory for images: {StreamingImageSequencePlugin.GetUsedImagesMemory().ToString()} MB");
+        }
+        
+//----------------------------------------------------------------------------------------------------------------------
+        [MenuItem(StreamingImageSequenceConstants.MENU_PATH + "Debug/Show Image Load Order",false,54)]
+        static void ShowImageLoadOrder() {
+            StringBuilder sb = new StringBuilder();
+
+            for (int imageType = 0; imageType < StreamingImageSequenceConstants.MAX_IMAGE_TYPES; ++imageType) {
+                int latestRequestFrame = StreamingImageSequencePlugin.GetImageLoadOrder(imageType);
+                sb.AppendLine($"IMAGE_TYPE: {imageType.ToString()}, order: {latestRequestFrame}");
+                sb.AppendLine();
+            }
+            sb.AppendLine("Current Frame: " + ImageLoader.GetCurrentFrame());
+            Debug.Log(sb.ToString());
+        }
 //----------------------------------------------------------------------------------------------------------------------
 
     }
