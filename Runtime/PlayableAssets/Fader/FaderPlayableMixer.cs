@@ -33,8 +33,11 @@ internal class FaderPlayableMixer : BasePlayableMixer<FaderPlayableAsset> {
 
 //----------------------------------------------------------------------------------------------------------------------
 
-    protected override void InitInternalV(GameObject boundGameObject) {
-        m_image = boundGameObject?.GetComponent<Image>();
+    protected override void InitInternalV(GameObject gameObject) {
+        if (null == gameObject)
+            return;
+        
+        m_image = gameObject.GetComponent<Image>();
     }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -58,7 +61,7 @@ internal class FaderPlayableMixer : BasePlayableMixer<FaderPlayableAsset> {
 
 //----------------------------------------------------------------------------------------------------------------------
 
-    Image m_image = null;
+    private Image m_image = null;
 
 }
 
