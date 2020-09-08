@@ -17,10 +17,7 @@ internal abstract class BasePlayableMixer<T> : PlayableBehaviour where T: Playab
     
     public override void PrepareFrame(Playable playable, FrameData info) {
         base.PrepareFrame(playable, info);
-        if (null == m_boundGameObject)
-            return;
-
-        m_boundGameObject.SetActive(false); //Always hide first, and show it later 
+        ShowObjectV(false);
     }
     
 
@@ -41,7 +38,8 @@ internal abstract class BasePlayableMixer<T> : PlayableBehaviour where T: Playab
             return;
         
         ProcessActiveClipV(activePlayableAsset, m_playableDirector.time, clip);
-        m_boundGameObject.SetActive(true);
+
+        ShowObjectV(true);
         
     }
 
@@ -118,9 +116,11 @@ internal abstract class BasePlayableMixer<T> : PlayableBehaviour where T: Playab
 
     protected abstract void InitInternalV(GameObject go);
     protected abstract void ProcessActiveClipV(T asset, double directorTime, TimelineClip activeClip);
+    
+    protected abstract void ShowObjectV(bool show);
+    
 
 //----------------------------------------------------------------------------------------------------------------------
-    protected GameObject GetBoundGameObject() { return m_boundGameObject; }
     protected PlayableDirector GetPlayableDirector() { return m_playableDirector; }
     protected IEnumerable<TimelineClip> GetClips() { return m_clips; }
     internal IEnumerable<KeyValuePair<TimelineClip,T>> GetClipAssets() { return m_clipAssets; }
