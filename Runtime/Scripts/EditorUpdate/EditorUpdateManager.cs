@@ -1,11 +1,15 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using UnityEngine.Assertions;
-
+using UnityEngine.SceneManagement;
+using UnityEngine.Timeline;
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using UnityEditor.Timeline;
+using UnityEngine.UI;
 
-namespace UnityEngine.StreamingImageSequence
+namespace Unity.StreamingImageSequence
 {
     
 
@@ -17,23 +21,26 @@ internal class EditorUpdateManager {
         EditorSceneManager.sceneClosed     += EditorUpdateManager_OnSceneClosed;
         EditorSceneManager.newSceneCreated += EditorUpdateManager_OnSceneCreated;
         EditorSceneManager.sceneOpened     += EditorUpdateManager_OnSceneOpened;
+
+        OnUnityEditorFocus += UpdateImageFolderPlayableAsset;
+
     }
 
     ~EditorUpdateManager() {
         StreamingImageSequencePlugin.ResetPlugin();        
     }
 
-    private static void EditorUpdateManager_OnSceneClosed(SceneManagement.Scene scene) {
+    private static void EditorUpdateManager_OnSceneClosed(Scene scene) {
         //Reset all imageLoading process when closing the scene
         ResetImageLoading();
     }
 
-    private static void EditorUpdateManager_OnSceneCreated( SceneManagement.Scene scene, NewSceneSetup setup, NewSceneMode mode) {
+    private static void EditorUpdateManager_OnSceneCreated( Scene scene, NewSceneSetup setup, NewSceneMode mode) {
         //Reset all imageLoading process when creating a new scene
         ResetImageLoading();        
     }
 
-    private static void EditorUpdateManager_OnSceneOpened( SceneManagement.Scene scene, OpenSceneMode mode) {
+    private static void EditorUpdateManager_OnSceneOpened( Scene scene, OpenSceneMode mode) {
         if (OpenSceneMode.Single != mode)
             return;
         
@@ -44,7 +51,7 @@ internal class EditorUpdateManager {
 //----------------------------------------------------------------------------------------------------------------------        
 
     static void EditorUpdateManager_Update() {
-        
+        UpdateEditorFocus();       
        
         double time = EditorApplication.timeSinceStartup;
         double timeDifference = time - m_lastUpdateInEditorTime;
@@ -70,6 +77,7 @@ internal class EditorUpdateManager {
         foreach (IUpdateTask job in m_mainThreadPeriodJobs) {
             job.Execute();
         }
+        
 
     }
 
@@ -101,6 +109,54 @@ internal class EditorUpdateManager {
     
 
 //----------------------------------------------------------------------------------------------------------------------
+
+
+    static void UpdateEditorFocus() {
+
+        bool isAppActive = UnityEditorInternal.InternalEditorUtility.isApplicationActive;
+        if (!m_editorFocused && isAppActive) {
+            m_editorFocused = true;
+            OnUnityEditorFocus?.Invoke(true);
+
+        } else if (m_editorFocused && !isAppActive) {
+            m_editorFocused = false;
+            OnUnityEditorFocus?.Invoke(false);
+        }        
+        
+    }
+    
+//----------------------------------------------------------------------------------------------------------------------
+
+    static void UpdateImageFolderPlayableAsset(bool isEditorFocused) {
+        if (!isEditorFocused)
+            return;
+
+        if (null == TimelineEditor.inspectedAsset) {
+            return;            
+        }
+        
+
+        IEnumerable<TrackAsset> trackAssets = TimelineEditor.inspectedAsset.GetOutputTracks();            
+        foreach (TrackAsset trackAsset in trackAssets) {
+            BaseSISTrack baseSISTrack = trackAsset as BaseSISTrack;
+            if (null == baseSISTrack)
+                continue;
+
+            if (!BitUtility.IsSet((int)baseSISTrack.GetCapsV(), (int) SISTrackCaps.IMAGE_FOLDER))
+                continue;
+                       
+            IEnumerable<TimelineClip> clips = trackAsset.GetClips();
+            foreach (TimelineClip clip in clips) {
+                ImageFolderPlayableAsset imageFolderPlayableAsset = clip.asset as ImageFolderPlayableAsset;
+                Assert.IsNotNull(imageFolderPlayableAsset);
+                imageFolderPlayableAsset.Reload();                
+            }
+        }
+        
+
+    }
+    
+//----------------------------------------------------------------------------------------------------------------------
     
     private static double m_lastUpdateInEditorTime;
        
@@ -108,6 +164,9 @@ internal class EditorUpdateManager {
     private static readonly HashSet<IUpdateTask> m_mainThreadPeriodJobs = new HashSet<IUpdateTask>();
     private static readonly List<IUpdateTask>    m_requestedTasks        = new List<IUpdateTask>();
     private static readonly HashSet<IUpdateTask> m_toRemoveTasks         = new HashSet<IUpdateTask>();
+    
+    private static event Action<bool> OnUnityEditorFocus;
+    private static bool m_editorFocused;    
 }
 
 

@@ -1,0 +1,379 @@
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using NUnit.Framework;
+using Unity.AnimeToolbox;
+using Unity.AnimeToolbox.Editor;
+using Unity.EditorCoroutines.Editor;
+using UnityEditor.ShortcutManagement;
+using UnityEditor.Timeline;
+using UnityEngine;
+using UnityEngine.Playables;
+using UnityEditor;
+using UnityEngine.Timeline;
+
+namespace Unity.StreamingImageSequence.Editor {
+
+/// <summary>
+/// The inspector of RenderCachePlayableAsset
+/// </summary>
+[CustomEditor(typeof(RenderCachePlayableAsset))]
+internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
+
+    [InitializeOnLoadMethod]
+    static void RenderCachePlayableAssetInspector_OnEditorLoad() {
+        Selection.selectionChanged += RenderCachePlayableAssetInspector_OnSelectionChanged;
+    }
+
+    static void RenderCachePlayableAssetInspector_OnSelectionChanged() {
+        if (!m_lockMode)
+            return;
+        
+        //Abort lock mode if we are not selecting marker
+        foreach (var selectedObj in Selection.objects) {
+            FrameMarker marker = selectedObj as FrameMarker;
+            if (null == marker) {
+                UnlockSISData();
+                return;                
+            }
+
+            if (m_inspectedSISDataForLocking != marker.GetOwner().GetOwner()) {
+                UnlockSISData();
+                return;
+            }
+
+        }         
+    }
+
+    
+//----------------------------------------------------------------------------------------------------------------------
+    void OnEnable() {
+        m_asset = target as RenderCachePlayableAsset;
+    }
+
+    
+//----------------------------------------------------------------------------------------------------------------------
+    public override void OnInspectorGUI() {
+        
+        //View resolution
+        Vector2 res = ViewEditorUtility.GetMainGameViewSize();
+        EditorGUILayout.LabelField("Resolution (Modify GameView size to change)");
+        ++EditorGUI.indentLevel;
+        EditorGUILayout.LabelField("Width", res.x.ToString(CultureInfo.InvariantCulture));
+        EditorGUILayout.LabelField("Height", res.y.ToString(CultureInfo.InvariantCulture));        
+        --EditorGUI.indentLevel;
+        EditorGUILayout.Space(15f);
+
+        //Check if the asset is actually inspected
+        if (null!=TimelineEditor.selectedClip && TimelineEditor.selectedClip.asset != m_asset) {
+            return;
+        }
+
+        ValidateAssetFolder();
+
+        string prevFolder = m_asset.GetFolder();
+        
+        string newFolder = EditorGUIDrawerUtility.DrawFolderSelectorGUI("Cache Output Folder", "Select Folder", 
+            prevFolder,
+            null,
+            AssetUtility.NormalizeAssetPath
+        );
+        if (newFolder != prevFolder) {
+            m_asset.SetFolder(AssetUtility.NormalizeAssetPath(newFolder));
+            GUIUtility.ExitGUI();
+        }
+        
+        TimelineClipSISData timelineClipSISData = m_asset.GetBoundTimelineClipSISData();
+        if (null == timelineClipSISData)
+            return;
+                
+        GUILayout.Space(15);
+        
+        //Capture Selected Frames
+        using (new EditorGUILayout.VerticalScope(GUI.skin.box)) {
+            DrawCaptureSelectedFramesGUI(TimelineEditor.selectedClip, timelineClipSISData);
+            DrawLockFramesGUI(TimelineEditor.selectedClip, timelineClipSISData);
+        }
+
+        ShortcutBinding updateRenderCacheShortcut 
+            = ShortcutManager.instance.GetShortcutBinding(SISEditorConstants.SHORTCUT_UPDATE_RENDER_CACHE);            
+        
+        GUILayout.Space(15);
+        if (GUILayout.Button($"Update Render Cache ({updateRenderCacheShortcut})")) {
+            
+            PlayableDirector director = TimelineEditor.inspectedDirector;
+            if (null == director) {
+                EditorUtility.DisplayDialog("Streaming Image Sequence",
+                    "PlayableAsset is not loaded in scene. Please load the correct scene before doing this operation.",
+                    "Ok");
+                return;
+            }            
+            
+            //Loop time             
+            EditorCoroutineUtility.StartCoroutine(UpdateRenderCacheCoroutine(director, m_asset), this);
+                        
+        }
+    }
+    
+//----------------------------------------------------------------------------------------------------------------------
+    internal static IEnumerator UpdateRenderCacheCoroutine(PlayableDirector director, RenderCachePlayableAsset renderCachePlayableAsset) {
+        Assert.IsNotNull(director);
+        Assert.IsNotNull(renderCachePlayableAsset);
+        
+        TimelineClipSISData timelineClipSISData = renderCachePlayableAsset.GetBoundTimelineClipSISData();
+        if (null == timelineClipSISData) {
+            EditorUtility.DisplayDialog("Streaming Image Sequence",
+                "RenderCachePlayableAsset is not ready",
+                "Ok");
+            yield break;
+            
+        }           
+
+        TrackAsset track = renderCachePlayableAsset.GetBoundTimelineClipSISData().GetOwner().parentTrack;        
+        BaseRenderCapturer renderCapturer = director.GetGenericBinding(track) as BaseRenderCapturer;
+        if (null == renderCapturer) {
+            EditorUtility.DisplayDialog("Streaming Image Sequence",
+                "Please bind an appropriate RenderCapturer component to the track.",
+                "Ok");
+            yield break;                
+        }
+
+        //Check output folder
+        string outputFolder = renderCachePlayableAsset.GetFolder();
+        if (string.IsNullOrEmpty(outputFolder) || !Directory.Exists(outputFolder)) {
+            EditorUtility.DisplayDialog("Streaming Image Sequence",
+                "Invalid output folder",
+                "Ok");
+            yield break;                                
+        }
+
+        //Check if we can capture
+        bool canCapture = renderCapturer.CanCapture();
+        if (!canCapture) {
+            EditorUtility.DisplayDialog("Streaming Image Sequence",
+                renderCapturer.GetLastErrorMessage(),
+                "Ok");
+            yield break;                                            
+        }
+
+        //begin capture
+        IEnumerator beginCapture = renderCapturer.BeginCapture();
+        while (beginCapture.MoveNext()) {
+            yield return beginCapture.Current;
+        }
+
+        Texture capturerTex = renderCapturer.GetInternalTexture();
+               
+        //Show progress in game view
+        GameObject progressGo = new GameObject("Blitter");
+        LegacyTextureBlitter blitter = progressGo.AddComponent<LegacyTextureBlitter>();
+        blitter.SetTexture(capturerTex);
+        blitter.SetCameraDepth(int.MaxValue);
+
+        TimelineClip timelineClip = timelineClipSISData.GetOwner();
+        double timePerFrame = 1.0f / track.timelineAsset.editorSettings.fps;
+        
+        int  fileCounter = 0;
+        int numFiles = (int) Math.Ceiling(timelineClip.duration / timePerFrame) + 1;
+        int numDigits = MathUtility.GetNumDigits(numFiles);
+        
+        string prefix = $"{timelineClip.displayName}_";
+        List<WatchedFileInfo> imageFiles = new List<WatchedFileInfo>(numFiles);
+ 
+        //Store old files that has the same pattern
+        string[] existingFiles = Directory.GetFiles (outputFolder, $"*.png");
+        HashSet<string> filesToDelete = new HashSet<string>(existingFiles);
+        
+        bool cancelled = false;
+        while (!cancelled) {
+            
+            //Always recalculate from start to avoid floating point errors
+            double directorTime = timelineClip.start + (fileCounter * timePerFrame);
+            if (directorTime > timelineClip.end)
+                break;
+            
+            string fileName       = $"{prefix}{fileCounter.ToString($"D{numDigits}")}.png";
+            string outputFilePath = Path.Combine(outputFolder, fileName);
+
+            SISPlayableFrame playableFrame = timelineClipSISData.GetPlayableFrame(fileCounter);                
+            bool captureFrame = (!timelineClipSISData.AreFrameMarkersRequested() //if markers are not requested, capture
+                || !File.Exists(outputFilePath) //if file doesn't exist, capture
+                || (null!=playableFrame && playableFrame.IsUsed() && !playableFrame.IsLocked())
+            );             
+            
+            if (filesToDelete.Contains(outputFilePath)) {
+                filesToDelete.Remove(outputFilePath);
+            }
+            
+           
+            if (captureFrame) {
+                SetDirectorTime(director, directorTime);
+                
+                //Need at least two frames in order to wait for the TimelineWindow to be updated ?
+                yield return null;
+                yield return null;
+                yield return null;
+                
+                //Unload texture because it may be overwritten
+                StreamingImageSequencePlugin.UnloadImageAndNotify(outputFilePath);
+                renderCapturer.CaptureToFile(outputFilePath);
+                
+            } 
+            Assert.IsTrue(File.Exists(outputFilePath));
+            FileInfo fileInfo = new FileInfo(outputFilePath);
+            
+            imageFiles.Add(new WatchedFileInfo(fileName, fileInfo.Length));
+
+            ++fileCounter;
+        
+            cancelled = EditorUtility.DisplayCancelableProgressBar(
+                "StreamingImageSequence", "Caching render results", ((float)fileCounter / numFiles));
+        }
+
+        if (!cancelled) {
+            renderCachePlayableAsset.SetImageFiles(imageFiles);        
+
+            //Delete old files
+            if (AssetDatabase.IsValidFolder(outputFolder)) {
+                foreach (string oldFile in filesToDelete) {                
+                    AssetDatabase.DeleteAsset(oldFile);
+                }                
+            } else {
+                foreach (string oldFile in filesToDelete) {                
+                    File.Delete(oldFile);
+                }
+                
+            }            
+        }
+        
+        //Notify
+        FolderContentsChangedNotifier.GetInstance().Notify(outputFolder);        
+               
+        //Cleanup
+        EditorUtility.ClearProgressBar();
+        renderCapturer.EndCapture();
+        ObjectUtility.Destroy(progressGo);
+        
+        AssetDatabase.Refresh();
+        
+        yield return null;
+
+    }
+    
+    
+//----------------------------------------------------------------------------------------------------------------------
+
+
+    private void DrawCaptureSelectedFramesGUI(TimelineClip timelineClip, TimelineClipSISData timelineClipSISData) {
+        bool         prevMarkersRequest = timelineClipSISData.AreFrameMarkersRequested();
+        TrackAsset   track              = timelineClip.parentTrack;
+        
+        GUILayout.BeginHorizontal();
+        bool markerVisibility = EditorGUILayout.Toggle("Show Frame Markers", prevMarkersRequest);
+        if (markerVisibility != prevMarkersRequest) {
+            timelineClipSISData.RequestFrameMarkers(markerVisibility);
+        }
+        GUILayout.FlexibleSpace();
+        EditorGUI.BeginDisabledGroup(!markerVisibility);        
+        if (GUILayout.Button("Capture All", GUILayout.Width(80))) {
+            Undo.RegisterCompleteObjectUndo(track, "RenderCachePlayableAsset: Capturing all frames");
+            timelineClipSISData.SetAllPlayableFramesProperty(PlayableFramePropertyID.USED, true);
+        }
+        if (GUILayout.Button("Reset", GUILayout.Width(50))) {
+            Undo.RegisterCompleteObjectUndo(track, "RenderCachePlayableAsset: Capturing no frame");
+            timelineClipSISData.SetAllPlayableFramesProperty(PlayableFramePropertyID.USED, false);            
+        }
+        EditorGUI.EndDisabledGroup();
+        GUILayout.EndHorizontal();
+        
+    }
+
+//----------------------------------------------------------------------------------------------------------------------
+
+
+    private void DrawLockFramesGUI(TimelineClip timelineClip, TimelineClipSISData timelineClipSISData) {
+        TrackAsset track = timelineClip.parentTrack;
+        
+        using(new EditorGUILayout.HorizontalScope()) {
+            EditorGUILayout.PrefixLabel("Lock Frames");
+            
+            bool lockMode = GUILayout.Toggle(m_lockMode, EditorTextures.GetLockTexture(), "Button", 
+                GUILayout.Height(20f), GUILayout.Width(30f));            
+            if (lockMode != m_lockMode) { //lock state changed
+                if (lockMode) {
+                    LockSISData(timelineClipSISData);
+                } else {
+                    UnlockSISData();
+                }
+            }
+            
+            GUILayout.FlexibleSpace();
+            EditorGUI.BeginDisabledGroup(!m_lockMode);        
+            if (GUILayout.Button("Lock All", GUILayout.Width(80))) {
+                Undo.RegisterCompleteObjectUndo(track, "RenderCachePlayableAsset: Locking all frames");
+                timelineClipSISData.SetAllPlayableFramesProperty(PlayableFramePropertyID.LOCKED, true);
+            }
+            if (GUILayout.Button("Reset", GUILayout.Width(50))) {
+                Undo.RegisterCompleteObjectUndo(track, "RenderCachePlayableAsset: Locking no frame");
+                timelineClipSISData.SetAllPlayableFramesProperty(PlayableFramePropertyID.LOCKED, false);
+            }
+            EditorGUI.EndDisabledGroup();
+        }
+    }
+    
+//----------------------------------------------------------------------------------------------------------------------
+    private void ValidateAssetFolder() {
+
+        string folder = m_asset.GetFolder();
+        if (!string.IsNullOrEmpty(folder) && Directory.Exists(folder))
+            return;
+
+        string assetName = string.IsNullOrEmpty(m_asset.name) ? "RenderCachePlayableAsset" : m_asset.name;
+        
+        //Generate unique folder
+        string baseFolder = Path.Combine(Application.streamingAssetsPath, assetName);
+        folder = baseFolder;
+        int index = 1;
+        while (Directory.Exists(folder)) {
+            folder = baseFolder + index.ToString();
+            ++index;
+        }
+                
+        Directory.CreateDirectory(folder);
+        m_asset.SetFolder(folder);
+    }
+    
+//----------------------------------------------------------------------------------------------------------------------
+
+    static void LockSISData(TimelineClipSISData timelineClipSISData) {
+        m_inspectedSISDataForLocking = timelineClipSISData;
+        m_inspectedSISDataForLocking.SetInspectedProperty(PlayableFramePropertyID.LOCKED);
+        m_lockMode = true;
+    }
+    
+    static void UnlockSISData() {
+        Assert.IsNotNull(m_inspectedSISDataForLocking);
+        m_inspectedSISDataForLocking.SetInspectedProperty(PlayableFramePropertyID.USED);
+        m_inspectedSISDataForLocking = null;
+        m_lockMode = false;
+    }
+    
+//----------------------------------------------------------------------------------------------------------------------
+    private static void SetDirectorTime(PlayableDirector director, double time) {
+        director.time = time;
+        TimelineEditor.Refresh(RefreshReason.SceneNeedsUpdate); 
+    }        
+    
+
+//----------------------------------------------------------------------------------------------------------------------
+
+    
+    private RenderCachePlayableAsset m_asset = null;
+    private static bool m_lockMode = false;
+    private static TimelineClipSISData m_inspectedSISDataForLocking = null;
+
+}
+
+}

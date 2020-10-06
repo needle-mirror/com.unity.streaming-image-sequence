@@ -1,6 +1,7 @@
-﻿using UnityEngine.Timeline;
+﻿using UnityEngine;
+using UnityEngine.Timeline;
 
-namespace UnityEngine.StreamingImageSequence {
+namespace Unity.StreamingImageSequence {
 
 
 internal static class TimelineUtility {
@@ -16,17 +17,14 @@ internal static class TimelineUtility {
 //----------------------------------------------------------------------------------------------------------------------
     
     internal static double CalculateTimePerFrame(TimelineClip clip) {
-        float  fps          = clip.parentTrack.timelineAsset.editorSettings.fps;
+        return CalculateTimePerFrame(clip.parentTrack);
+    }
+
+//----------------------------------------------------------------------------------------------------------------------
+    internal static double CalculateTimePerFrame(TrackAsset  trackAsset) {
+        float  fps          = trackAsset.timelineAsset.editorSettings.fps;
         double timePerFrame = 1.0f / fps;
         return timePerFrame;
-    }
-    
-//----------------------------------------------------------------------------------------------------------------------
-    internal  static void ResetTimelineCurve(TimelineClip clip) {
-        AnimationCurve animationCurve = new AnimationCurve();
-        StreamingImageSequencePlayableAsset.ValidateAnimationCurve(ref animationCurve, (float) (clip.duration * clip.timeScale));
-        StreamingImageSequencePlayableAsset.RefreshTimelineClipCurve(clip, animationCurve);
-        clip.clipIn    = 0;
     }
     
     

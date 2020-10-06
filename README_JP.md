@@ -1,9 +1,16 @@
-# Streaming Image Sequence
-
 ## その他の言語
 * [English](README.md)
+
+# Streaming Image Sequence
+
+[![](https://badge-proxy.cds.internal.unity3d.com/44fe9b4e-feeb-409f-8fcd-d86e42d09b98)](https://badges.cds.internal.unity3d.com/packages/com.unity.streaming-image-sequence/build-info?branch=dev&testWorkflow=package-isolation)
+[![](https://badge-proxy.cds.internal.unity3d.com/f9703ad6-4a57-4861-8125-4cec53ece26f)](https://badges.cds.internal.unity3d.com/packages/com.unity.streaming-image-sequence/dependencies-info?branch=dev&testWorkflow=updated-dependencies)
+[![](https://badge-proxy.cds.internal.unity3d.com/221d27f5-9807-40c1-8fde-50a1757801b4)](https://badges.cds.internal.unity3d.com/packages/com.unity.streaming-image-sequence/dependants-info)
+[![](https://badge-proxy.cds.internal.unity3d.com/1f8f02a0-6e03-417e-9c92-22f978f96c69)](https://badges.cds.internal.unity3d.com/packages/com.unity.streaming-image-sequence/warnings-info?branch=dev)
+
+![ReleaseBadge](https://badge-proxy.cds.internal.unity3d.com/2fe2fc7a-99f7-4bde-b23d-c3358e846fac)
+![ReleaseBadge](https://badge-proxy.cds.internal.unity3d.com/84b887b2-1e62-4962-848e-9d6c07023710)
  
-## 概要
 
 Streaming Image Sequence は、Unity 2D Sprite を作成せずに Unity の Timeline で一連の画像シーケンスを
 簡単に再生するためのパッケージです。
@@ -41,11 +48,17 @@ Streaming Image Sequence は現在プレビューパッケージとして存在�
 
 ## 機能
 
-### [一連の画像を生成する](./Documentation~/jp/StreamingImageSequencePlayableAsset.md)
-![StreamingImageSequenceDemo](Documentation~/images/StreamingImageSequenceDemo.gif)
+1. #### [一連の画像を生成する](./Documentation~/jp/StreamingImageSequencePlayableAsset.md)
 
-### [Image オブジェクトをフェードさせる](./Documentation~/jp/FaderPlayableAsset.md)
-![FaderDemo](Documentation~/images/FaderDemo.gif)
+   ![StreamingImageSequenceDemo](Documentation~/images/StreamingImageSequenceDemo.gif)
+
+2. #### [描画の結果のキャッシュを生成する](./Documentation~/jp/RenderCachePlayableAsset.md)
+
+   ![RenderCacheDemo](Documentation~/images/RenderCacheDemo.gif)
+
+3. #### [Image オブジェクトをフェードさせる](./Documentation~/jp/FaderPlayableAsset.md)
+
+   ![FaderDemo](Documentation~/images/FaderDemo.gif)
 
 
 ## メモリ
