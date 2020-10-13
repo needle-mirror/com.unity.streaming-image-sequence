@@ -101,6 +101,16 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
             = ShortcutManager.instance.GetShortcutBinding(SISEditorConstants.SHORTCUT_UPDATE_RENDER_CACHE);            
         
         GUILayout.Space(15);
+        using (new EditorGUILayout.VerticalScope(GUI.skin.box)) {            
+            Color updateBGColor = m_asset.GetUpdateBGColor();
+            Color timelineBgColor = m_asset.GetTimelineBGColor();
+            m_asset.SetUpdateBGColor(EditorGUILayout.ColorField("Update Background Color", updateBGColor));
+            m_asset.SetTimelineBGColor(EditorGUILayout.ColorField("Timeline Background Color", timelineBgColor));
+        }
+
+        GUILayout.Space(15);
+        
+        
         if (GUILayout.Button($"Update Render Cache ({updateRenderCacheShortcut})")) {
             
             PlayableDirector director = TimelineEditor.inspectedDirector;
@@ -164,13 +174,9 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
             yield return beginCapture.Current;
         }
 
-        Texture capturerTex = renderCapturer.GetInternalTexture();
-               
         //Show progress in game view
-        GameObject progressGo = new GameObject("Blitter");
-        LegacyTextureBlitter blitter = progressGo.AddComponent<LegacyTextureBlitter>();
-        blitter.SetTexture(capturerTex);
-        blitter.SetCameraDepth(int.MaxValue);
+        Texture capturerTex = renderCapturer.GetInternalTexture();        
+        GameObject blitterGO  = CreateBlitter(capturerTex, renderCachePlayableAsset.GetUpdateBGColor()); 
 
         TimelineClip timelineClip = timelineClipSISData.GetOwner();
         double timePerFrame = 1.0f / track.timelineAsset.editorSettings.fps;
@@ -254,13 +260,40 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
         //Cleanup
         EditorUtility.ClearProgressBar();
         renderCapturer.EndCapture();
-        ObjectUtility.Destroy(progressGo);
+        ObjectUtility.Destroy(blitterGO);
         
         AssetDatabase.Refresh();
         
         yield return null;
 
     }
+
+    
+//----------------------------------------------------------------------------------------------------------------------
+
+    private static GameObject CreateBlitter(Texture texToBlit, Color bgColor) {
+        GameObject           blitterGO = new GameObject("Blitter");
+
+#if AT_USE_HDRP        
+        HDRPTextureEndFrameBlitter blitter = blitterGO.AddComponent<HDRPTextureEndFrameBlitter>();
+        blitter.SetTargetCameraType(CameraType.Game);
+#elif AT_USE_URP        
+        URPTextureBlitter blitter = blitterGO.AddComponent<URPTextureBlitter>();        
+#else        
+        LegacyTextureBlitter blitter = blitterGO.AddComponent<LegacyTextureBlitter>();
+#endif        
+        blitter.SetSrcTexture(texToBlit);
+        blitter.SetCameraDepth(int.MaxValue);
+
+        //Setup blitMaterial
+        Shader blitShader = AssetDatabase.LoadAssetAtPath<Shader>(SISEditorConstants.TRANSPARENT_BG_COLOR_SHADER_PATH);            
+        Material blitMaterial = new Material(blitShader);
+        blitMaterial.hideFlags = HideFlags.DontSaveInBuild | HideFlags.DontSaveInEditor;
+        blitMaterial.SetColor(m_bgColorProperty, bgColor);
+        blitter.SetBlitMaterial(blitMaterial);
+        
+        return blitterGO;
+    } 
     
     
 //----------------------------------------------------------------------------------------------------------------------
@@ -327,22 +360,32 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
     private void ValidateAssetFolder() {
 
         string folder = m_asset.GetFolder();
-        if (!string.IsNullOrEmpty(folder) && Directory.Exists(folder))
-            return;
+        if (!string.IsNullOrEmpty(folder)) {
+            
+            if (Directory.Exists(folder))           
+                return;
+            
+            try {
+                Directory.CreateDirectory(folder);
+                return;
+            } catch {
+                //Fallback to the below code
+            }
+        }
 
-        string assetName = string.IsNullOrEmpty(m_asset.name) ? "RenderCachePlayableAsset" : m_asset.name;
-        
+        AssignDefaultAssetFolder();
+                
+    }
+
+//----------------------------------------------------------------------------------------------------------------------
+
+    private void AssignDefaultAssetFolder() {
+        string assetName = string.IsNullOrEmpty(m_asset.name) ? "RenderCachePlayableAsset" : m_asset.name;               
         //Generate unique folder
         string baseFolder = Path.Combine(Application.streamingAssetsPath, assetName);
-        folder = baseFolder;
-        int index = 1;
-        while (Directory.Exists(folder)) {
-            folder = baseFolder + index.ToString();
-            ++index;
-        }
-                
-        Directory.CreateDirectory(folder);
-        m_asset.SetFolder(folder);
+        string folder = PathUtility.GenerateUniqueFolder(baseFolder); 
+        m_asset.SetFolder(AssetUtility.NormalizeAssetPath(folder).Replace('\\','/'));
+        Repaint();        
     }
     
 //----------------------------------------------------------------------------------------------------------------------
@@ -365,15 +408,14 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
         director.time = time;
         TimelineEditor.Refresh(RefreshReason.SceneNeedsUpdate); 
     }        
-    
 
 //----------------------------------------------------------------------------------------------------------------------
 
     
-    private RenderCachePlayableAsset m_asset = null;
-    private static bool m_lockMode = false;
-    private static TimelineClipSISData m_inspectedSISDataForLocking = null;
-
+    private                 RenderCachePlayableAsset m_asset                      = null;
+    private static          bool                     m_lockMode                   = false;
+    private static          TimelineClipSISData      m_inspectedSISDataForLocking = null;
+    private static readonly int                      m_bgColorProperty            = Shader.PropertyToID("_BGColor");
 }
 
 }
