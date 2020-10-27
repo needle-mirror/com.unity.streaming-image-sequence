@@ -4,6 +4,7 @@ using UnityEditor.Timeline;
 using UnityEditorInternal;
 using UnityEngine;
 using UnityEditor;
+using UnityEngine.Timeline;
 
 namespace Unity.StreamingImageSequence.Editor {
 
@@ -36,8 +37,6 @@ internal class StreamingImageSequencePlayableAssetInspector : UnityEditor.Editor
         if (null == m_asset)
             return;
         
-        EditorGUI.BeginChangeCheck();
-        serializedObject.Update();
         Undo.RecordObject(m_asset, "StreamingImageSequencePlayableAssetInspector::OnInspectorGUI");
 
         using (new EditorGUILayout.VerticalScope (GUI.skin.box))  {
@@ -49,9 +48,7 @@ internal class StreamingImageSequencePlayableAssetInspector : UnityEditor.Editor
                 EditorGUILayout.LabelField("Height",  $"{res.Height } px");
             }
             GUILayout.Space(4f);
-
         }
-
         
         GUILayout.Space(4f);
 
@@ -73,32 +70,53 @@ internal class StreamingImageSequencePlayableAssetInspector : UnityEditor.Editor
             }
             EditorGUILayout.EndHorizontal();
             
+            using (new EditorGUI.DisabledScope(0 == numImages)) {
+                if (0 == numImages)
+                    EditorGUILayout.IntField("FPS", 0);
+                else {
+                    TimelineClip clip = m_asset.GetBoundTimelineClipSISData().GetOwner();
+                    
+                    float prevFps = numImages / (float)(clip.duration); 
+                    float fps     = EditorGUILayout.FloatField("FPS", prevFps);
+                    if (!Mathf.Approximately(fps, prevFps) && !Mathf.Approximately(fps, 0.0f)) {
+                        double prevDuration = clip.duration;
+                        clip.duration  = numImages / fps;
+                        clip.timeScale = (prevDuration * clip.timeScale) / clip.duration;
+                    }
+                }
+            }
+            
             GUILayout.Space(4f);
             m_imageListFoldout = EditorGUILayout.Foldout(m_imageListFoldout, "Images");
             if (m_imageListFoldout) {
                 DoImageGUI();
             }
         }
-        
-        if (null!= TimelineEditor.selectedClip) {
-            
 
-            GUILayout.Space(15);
-            //Frame markers
-            if (TimelineEditor.selectedClip.asset == m_asset) {
-                InspectorUtility.ShowFrameMarkersGUI(m_asset);
-            }
-            GUILayout.Space(15);
-            if (GUILayout.Button("Reset Curve (Not Undoable)")) {
-                //AnimationClip.SetCurve() doesn't seem to be undoable
-                StreamingImageSequencePlayableAsset.ResetTimelineClipCurve(TimelineEditor.selectedClip);
-            }
-            
+        if (null == TimelineEditor.selectedClip) 
+            return;
+        
+        GUILayout.Space(15);
+        //Frame markers
+        if (TimelineEditor.selectedClip.asset == m_asset) {
+            InspectorUtility.ShowFrameMarkersGUI(m_asset);
         }
+        GUILayout.Space(15);
         
-        serializedObject.ApplyModifiedProperties();
-        EditorGUI.EndChangeCheck();
+        using (new EditorGUILayout.VerticalScope(GUI.skin.box)) {
+            EditorGUILayout.LabelField("Background Colors");
+            ++EditorGUI.indentLevel;
+            Color timelineBgColor = m_asset.GetTimelineBGColor();
+            m_asset.SetTimelineBGColor(EditorGUILayout.ColorField("In Timeline Window", timelineBgColor));
+            --EditorGUI.indentLevel;
+            GUILayout.Space(15);
+        }
 
+        
+        if (GUILayout.Button("Reset Curve (Not Undoable)")) {
+            //AnimationClip.SetCurve() doesn't seem to be undoable
+            StreamingImageSequencePlayableAsset.ResetTimelineClipCurve(TimelineEditor.selectedClip);
+        }
     }
 
 //----------------------------------------------------------------------------------------------------------------------

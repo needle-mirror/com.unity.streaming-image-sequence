@@ -5,10 +5,10 @@ A playable asset for playing sequential image sequences in Unity Timeline.
 # Supported Image Formats
 
 
-|             | Windows            | Mac                |
-| ----------- | ------------------ | ------------------ |
-| png         | :white_check_mark: | :white_check_mark: |    
-| tga         | :white_check_mark: |                    |
+|             | Windows            | Mac                | Linux              |
+| ----------- | ------------------ | ------------------ | ------------------ |
+| png         | :white_check_mark: | :white_check_mark: | :white_check_mark: |       
+| tga         | :white_check_mark: | :white_check_mark: | :white_check_mark: |    
 
 
 # Tutorial 
@@ -75,6 +75,9 @@ Refer to [FrameMarkers](FrameMarkers.md) for more details.
   Show/hide the [FrameMarker](FrameMarkers.md) of each frame.
   * **Reset**  
     Reset edits to FrameMarkers.
+* **Background Colors**.  
+  * **In Timeline Window**  
+    The background color of the preview images in the Timeline window.    
 * **Reset Curve**.  
   Reset the curve timing in the PlayableAsset to be linear.
 

@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.6.3-preview] - 2020-10-27
+* chore: remove debug logs when updating package for 2020.2 and above
+
+## [0.6.2-preview] - 2020-10-27
+* chore: add debug logs when updating package for 2020.2 and above
+
+## [0.6.1-preview] - 2020-10-27
+* chore: republish 0.6.0-preview as 0.6.1-preview
+
+## [0.6.0-preview] - 2020-10-26
+
+* feat: add default StreamingImageSequencePlayableAsset FPS setting in Preferences 
+* feat: enable the setting of background color in Timeline for SISPlayableAsset
+* feat: save Preferences immediately when the setting is changed 
+* feat: add FPS field in the inspector of StreamingImageSequencePlayableAsset to change its length
+* feat: support TGA on Mac by loading TGA images on all platforms using stb
+* feat: support Linux (PNG, TGA)
+* feat: Add a notifier to restart Unity if the package is updated
+* fix: crash when trying to load a preview of an image that is not available
+* fix: memory leak in loading PNG on Windows when an out of memory situation happened.
+* opt: optimize performance when loading PNG on Mac by using stb
+* doc: update that TGA is now supported on Windows and Mac 
+
+
 ## [0.5.1-preview] - 2020-10-13
 
 * chore: update dependency to com.unity.anime-toolbox@0.2.1-preview
