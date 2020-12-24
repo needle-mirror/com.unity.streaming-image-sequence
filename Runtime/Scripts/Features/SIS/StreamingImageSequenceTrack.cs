@@ -40,6 +40,7 @@ internal class StreamingImageSequenceTrack : BaseTimelineClipSISDataTrack<Stream
 //----------------------------------------------------------------------------------------------------------------------
     private void OnDestroy() {
         m_trackMixer?.Destroy();
+        m_trackMixer = null;
     }
     
     
@@ -56,7 +57,16 @@ internal class StreamingImageSequenceTrack : BaseTimelineClipSISDataTrack<Stream
         if (director != null) {
             Object                         boundObject = director.GetGenericBinding(this);
             StreamingImageSequenceRenderer renderer = boundObject as StreamingImageSequenceRenderer;
-            m_trackMixer.Init(null == renderer ? null : renderer.gameObject, director, GetClips());
+
+            if (null == renderer) { 
+                //no object bound to the track
+                m_trackMixer.Init(null, director, GetClips());
+            } else {
+                m_trackMixer.Init(renderer.gameObject, director, GetClips());
+                renderer.Init();
+                m_trackMixer.SetRenderer(renderer);                
+            }
+            
         }
         
         return mixer;

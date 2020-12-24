@@ -4,6 +4,8 @@ using UnityEngine.Playables;
 using UnityEngine.Timeline;
 using UnityEngine.Assertions;
 using System.Collections.Generic;
+using JetBrains.Annotations;
+using Unity.AnimeToolbox;
 using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor.Timeline;
@@ -84,9 +86,20 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
     /// Constructor
     /// </summary>
     public StreamingImageSequencePlayableAsset() {
-        m_lastCopiedImageIndex = -1;            
+        m_lastCopiedImageIndex = -1;
     }
-    
+
+//----------------------------------------------------------------------------------------------------------------------
+
+    void OnEnable() {
+        m_texture              = null;
+        m_lastCopiedImageIndex = -1;
+    }
+
+    private void OnDisable() {
+        ResetTexture();
+    }
+       
 //----------------------------------------------------------------------------------------------------------------------
 
     //[Note-sin: 2020-7-17] This is also called when the TimelineClip in TimelineWindow is deleted, instead of just
@@ -116,7 +129,10 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
             double scaledTimePerFrame = TimelineUtility.CalculateTimePerFrame(clip) * clip.timeScale;            
       
             //Try to check if this frame is "dropped", so that we should use the image in the prev frame
-            int              playableFrameIndex = Mathf.RoundToInt((float) localTime / (float)scaledTimePerFrame);
+            int playableFrameIndex = Mathf.RoundToInt((float) localTime / (float)scaledTimePerFrame);
+            if (playableFrameIndex < 0)
+                return 0;
+                
             SISPlayableFrame playableFrame      = timelineSISData.GetPlayableFrame(playableFrameIndex);
             while (playableFrameIndex > 0 && !playableFrame.IsUsed()) {
                 --playableFrameIndex;
@@ -140,16 +156,6 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
         GetAndValidateAnimationCurve(clip, out AnimationCurve curve);                       
         return curve.Evaluate((float)(localTime));
     }
-    
-//----------------------------------------------------------------------------------------------------------------------
-
-
-    /// <summary>
-    /// Returns the texture that contains the active image according to the PlayableDirector's time.
-    /// </summary>
-    /// <returns></returns>
-    public Texture2D GetTexture() { return m_texture; }        
-                    
     
 //----------------------------------------------------------------------------------------------------------------------        
     private void Reset() {
@@ -175,9 +181,9 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
     /// <inheritdoc/>
     public ClipCaps clipCaps {
 #if AT_USE_TIMELINE_GE_1_4_0            
-        get { return ClipCaps.ClipIn | ClipCaps.AutoScale; }
+        get { return ClipCaps.ClipIn | ClipCaps.AutoScale | ClipCaps.Extrapolation; }
 #else            
-        get { return ClipCaps.ClipIn | ClipCaps.SpeedMultiplier; }
+        get { return ClipCaps.ClipIn | ClipCaps.SpeedMultiplier | ClipCaps.Extrapolation; }
 #endif            
     }
             
@@ -186,13 +192,62 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
 #region PlayableAsset functions override
     /// <inheritdoc/>
     public sealed override Playable CreatePlayable(PlayableGraph graph, GameObject go) {
-        return Playable.Null;
+        return Playable.Create(graph);
     }
    
 #endregion    
     
    
-//---------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------
+    [CanBeNull]
+    internal Texture2D GetTexture() { return m_primaryImageIndex == m_lastCopiedImageIndex ? m_texture : null;}
+    
+//----------------------------------------------------------------------------------------------------------------------
+
+    internal void RequestLoadImage(int index) {
+        int numImages = m_imageFiles.Count;
+        
+        if (null == m_imageFiles || index < 0 || index >= numImages 
+            || string.IsNullOrEmpty(m_imageFiles[index].GetName())) {
+            return;
+        }
+
+        m_primaryImageIndex = index;
+
+        if (QueueImageLoadTask(index, out ImageData readResult)) {
+            m_forwardPreloadImageIndex  = Mathf.Min(m_primaryImageIndex + 1, numImages - 1);
+            m_backwardPreloadImageIndex = Mathf.Max(m_primaryImageIndex - 1, 0);                
+        } else {
+            //If we can't queue, try from the primary index again
+            m_forwardPreloadImageIndex = m_backwardPreloadImageIndex = index;
+        }
+
+        if (StreamingImageSequenceConstants.READ_STATUS_SUCCESS == readResult.ReadStatus) {
+            UpdateTexture(readResult, index);
+        }
+
+    }
+    
+//----------------------------------------------------------------------------------------------------------------------
+           
+    //returns false if the texture is not changed, true otherwise    
+    internal bool UpdateTextureWithRequestedImage() {
+        if (m_lastCopiedImageIndex == m_primaryImageIndex)
+            return false;
+        
+        string fullPath = GetImageFilePath(m_primaryImageIndex);
+        if (string.IsNullOrEmpty(fullPath) || !File.Exists(fullPath))
+            return false;
+
+        ImageLoader.GetImageDataInto(fullPath,StreamingImageSequenceConstants.IMAGE_TYPE_FULL,out ImageData imageData);
+        if (StreamingImageSequenceConstants.READ_STATUS_SUCCESS != imageData.ReadStatus)
+            return false;
+        
+        UpdateTexture(imageData, m_primaryImageIndex);
+        return true;
+    }
+    
+//----------------------------------------------------------------------------------------------------------------------
 
     internal void ContinuePreloadingImages() {
 
@@ -226,10 +281,10 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
     }
 
 
-//----------------------------------------------------------------------------------------------------------------------        
+//----------------------------------------------------------------------------------------------------------------------
+   
     //return true if we should continue preloading the next image. False otherwise
     private bool QueueImageLoadTask(int index, out ImageData imageData) {
-        const int TEX_TYPE = StreamingImageSequenceConstants.IMAGE_TYPE_FULL;
         string fullPath = GetImageFilePath(index);
 
         if (!File.Exists(fullPath)) {
@@ -237,7 +292,7 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
             return true;
         }
 
-        ImageLoader.GetImageDataInto(fullPath,TEX_TYPE,out imageData);
+        ImageLoader.GetImageDataInto(fullPath,StreamingImageSequenceConstants.IMAGE_TYPE_FULL,out imageData);
         //Debug.Log("imageData.readStatus " + imageData.readStatus + "Loading " + filename);
         
         switch (imageData.ReadStatus) {
@@ -253,47 +308,28 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
                    
         return true;
     }
-//----------------------------------------------------------------------------------------------------------------------        
+
     
-
-    internal bool RequestLoadImage(int index) {
-        int numImages = m_imageFiles.Count;
-        
-        if (null == m_imageFiles || index < 0 || index >= numImages 
-            || string.IsNullOrEmpty(m_imageFiles[index].GetName())) {
-            return false;
+//---------------------------------------------------------------------------------------------------------------------
+    Texture2D UpdateTexture(ImageData readResult, int index) {
+        if (m_texture.IsNullRef()) {
+            m_texture = readResult.CreateCompatibleTexture(HideFlags.DontSaveInBuild | HideFlags.DontSaveInEditor);                    
         }
 
-        m_primaryImageIndex         = index;
+        if (m_lastCopiedImageIndex == index)
+            return m_texture;
 
-        if (QueueImageLoadTask(index, out ImageData readResult)) {
-            m_forwardPreloadImageIndex  = Mathf.Min(m_primaryImageIndex + 1, numImages - 1);
-            m_backwardPreloadImageIndex = Mathf.Max(m_primaryImageIndex - 1, 0);                
-        } else {
-            //If we can't queue, try from the primary index again
-            m_forwardPreloadImageIndex = m_backwardPreloadImageIndex = index;
-        }
-
-        if (StreamingImageSequenceConstants.READ_STATUS_SUCCESS == readResult.ReadStatus) {
-            if (null == m_texture) {
-                m_texture = readResult.CreateCompatibleTexture(HideFlags.DontSaveInBuild | HideFlags.DontSaveInEditor);                    
-            }
-
-            if (m_lastCopiedImageIndex != index) {
-                m_texture.name = "Full: " + m_imageFiles[index].GetName();
-                readResult.CopyBufferToTexture(m_texture);
-                UpdateResolution(ref readResult);
-                
-                m_lastCopiedImageIndex = index;
-            }
-        }
-        
-        return null!=m_texture;
-    }        
+        m_texture.name = "Full: " + m_imageFiles[index].GetName();
+        readResult.CopyBufferToTexture(m_texture);
+        UpdateResolution(ref readResult);                
+        m_lastCopiedImageIndex = index;
+        return m_texture;
+    }
+    
 
 //---------------------------------------------------------------------------------------------------------------------
     void ResetTexture() {
-        if (null != m_texture) {
+        if (!m_texture.IsNullRef()) {
             ObjectUtility.Destroy(m_texture);
             m_texture = null;
         }
@@ -406,7 +442,7 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
     }
 
     public void OnAfterDeserialize() {
-        if (m_version < (int) SISPlayableAssetVersion.WATCHED_FILE_1_0) {
+        if (m_version < (int) SISPlayableAssetVersion.WATCHED_FILE_0_4) {
             if (null != m_imageFileNames && m_imageFileNames.Count > 0) {
                 m_imageFiles = WatchedFileInfo.CreateList(m_folder, m_imageFileNames);
                 m_imageFileNames.Clear();
@@ -469,7 +505,6 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
         "*.png",
         "*.tga"             
     };
-
     
 #endif
    
@@ -479,19 +514,19 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
     private int m_primaryImageIndex         = 0;
     private int m_forwardPreloadImageIndex  = 0;
     private int m_backwardPreloadImageIndex = 0;
-    
 
-    Texture2D m_texture = null;
+
+    Texture2D    m_texture       = null;
 
 //----------------------------------------------------------------------------------------------------------------------
     
-    private const int CUR_SIS_PLAYABLE_ASSET_VERSION = (int) SISPlayableAssetVersion.WATCHED_FILE_1_0;
+    private const int CUR_SIS_PLAYABLE_ASSET_VERSION = (int) SISPlayableAssetVersion.WATCHED_FILE_0_4;
             
 
     enum SISPlayableAssetVersion {
         INITIAL        = 1, //initial
-        FOLDER_MD5_1_0,       //For version 1.0.0-preview, (obsolete)
-        WATCHED_FILE_1_0,     //For version 1.0.0-preview, with watched file, instead of folder
+        FOLDER_MD5_0_3,       //For version 0_3.0-preview, (obsolete)
+        WATCHED_FILE_0_4,     //For version 0.4.0-preview, with watched file, instead of folder
 
     }
 }
