@@ -8,9 +8,9 @@ using UnityEditor.Timeline.Actions;
 
 namespace Unity.StreamingImageSequence.Editor {
 
-[MenuEntry("Lock and Edit")]
+[MenuEntry("Edit")]
 
-class LockAndEditFrameMarkerAction : MarkerAction
+internal class SISFrameMarkerAction_Edit : MarkerAction
 {
     ///<inheritdoc />
     public override bool Execute(IEnumerable<IMarker> markers) {
@@ -21,11 +21,11 @@ class LockAndEditFrameMarkerAction : MarkerAction
                 return false;
             
             SISPlayableFrame playableFrame = frameMarker.GetOwner();
-            RenderCachePlayableAsset playableAsset = playableFrame.GetTimelineClipAsset<RenderCachePlayableAsset>();            
+            StreamingImageSequencePlayableAsset playableAsset = playableFrame.GetTimelineClipAsset<StreamingImageSequencePlayableAsset>();            
             if (null == playableAsset)
                 return false;
             
-            FrameMarkerInspector.LockAndEditPlayableFrame(playableFrame, playableAsset);
+            FrameMarkerInspector.EditPlayableFrame(playableFrame, playableAsset);
             
         }
 
@@ -42,7 +42,7 @@ class LockAndEditFrameMarkerAction : MarkerAction
             
             
             SISPlayableFrame playableFrame = frameMarker.GetOwner();
-            RenderCachePlayableAsset playableAsset = playableFrame.GetTimelineClipAsset<RenderCachePlayableAsset>();            
+            StreamingImageSequencePlayableAsset playableAsset = playableFrame.GetTimelineClipAsset<StreamingImageSequencePlayableAsset>();            
             if (null == playableAsset)
                 return ActionValidity.NotApplicable;            
 
