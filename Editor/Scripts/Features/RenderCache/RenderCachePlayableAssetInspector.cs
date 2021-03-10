@@ -39,7 +39,7 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
                 return;                
             }
 
-            if (m_inspectedSISDataForLocking != marker.GetOwner().GetOwner()) {
+            if (m_inspectedClipDataForLocking != marker.GetOwner().GetOwner()) {
                 UnlockSISData();
                 return;
             }
@@ -86,16 +86,24 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
             GUIUtility.ExitGUI();
         }
         
-        TimelineClipSISData timelineClipSISData = m_asset.GetBoundTimelineClipSISData();
-        if (null == timelineClipSISData)
+        //Output Format
+        EditorGUIDrawerUtility.DrawUndoableGUI(m_asset, "RenderCache Output Format", m_asset.GetOutputFormat(),
+            /*guiFunc=*/ (RenderCacheOutputFormat prevOutputFormat)=> {
+                return (RenderCacheOutputFormat) EditorGUILayout.EnumPopup("Output Format:", prevOutputFormat);;
+            }, 
+            /*updateFunc=*/ (RenderCacheOutputFormat newOutputFormat) => { m_asset.SetOutputFormat(newOutputFormat); }
+        );
+                
+        RenderCacheClipData clipData = m_asset.GetBoundClipData();
+        if (null == clipData)
             return;
                 
         GUILayout.Space(15);
         
         //Capture Selected Frames
         using (new EditorGUILayout.VerticalScope(GUI.skin.box)) {
-            DrawCaptureSelectedFramesGUI(TimelineEditor.selectedClip, timelineClipSISData);
-            DrawLockFramesGUI(TimelineEditor.selectedClip, timelineClipSISData);
+            DrawCaptureSelectedFramesGUI(TimelineEditor.selectedClip, clipData);
+            DrawLockFramesGUI(TimelineEditor.selectedClip, clipData);
         }
         
         GUILayout.Space(15);
@@ -132,6 +140,11 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
 //----------------------------------------------------------------------------------------------------------------------
 
     private void DrawUpdateRenderCacheGUI() {
+        RenderCacheClipData clipData = m_asset.GetBoundClipData();
+        Assert.IsNotNull(clipData);
+        if (clipData.GetOwner().GetParentTrack().IsNullRef())
+            return;
+        
         ShortcutBinding updateRenderCacheShortcut 
             = ShortcutManager.instance.GetShortcutBinding(SISEditorConstants.SHORTCUT_UPDATE_RENDER_CACHE);            
 
@@ -190,8 +203,8 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
         Assert.IsNotNull(director);
         Assert.IsNotNull(renderCachePlayableAsset);
         
-        TimelineClipSISData timelineClipSISData = renderCachePlayableAsset.GetBoundTimelineClipSISData();
-        if (null == timelineClipSISData) {
+        PlayableFrameClipData clipData = renderCachePlayableAsset.GetBoundClipData();
+        if (null == clipData) {
             EditorUtility.DisplayDialog("Streaming Image Sequence",
                 "RenderCachePlayableAsset is not ready",
                 "Ok");
@@ -199,7 +212,7 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
             
         }           
 
-        TrackAsset track = renderCachePlayableAsset.GetBoundTimelineClipSISData().GetOwner().GetParentTrack();        
+        TrackAsset track = renderCachePlayableAsset.GetBoundClipData().GetOwner().GetParentTrack();        
         BaseRenderCapturer renderCapturer = director.GetGenericBinding(track) as BaseRenderCapturer;
         if (null == renderCapturer) {
             EditorUtility.DisplayDialog("Streaming Image Sequence",
@@ -218,7 +231,7 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
         }
 
         //Check if we can capture
-        bool canCapture = renderCapturer.CanCapture();
+        bool canCapture = renderCapturer.CanCaptureV();
         if (!canCapture) {
             EditorUtility.DisplayDialog("Streaming Image Sequence",
                 renderCapturer.GetLastErrorMessage(),
@@ -227,17 +240,27 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
         }
 
         //begin capture
-        IEnumerator beginCapture = renderCapturer.BeginCapture();
+        IEnumerator beginCapture = renderCapturer.BeginCaptureV();
         while (beginCapture.MoveNext()) {
             yield return beginCapture.Current;
         }
 
         //Show progress in game view
         Texture capturerTex = renderCapturer.GetInternalTexture();
-        RenderCachePlayableAssetEditorConfig editorConfig = renderCachePlayableAsset.GetEditorConfig();
-        GameObject blitterGO  = CreateBlitter(capturerTex, editorConfig.GetUpdateBGColor()); 
+        RenderCachePlayableAssetEditorConfig editorConfig = renderCachePlayableAsset.GetEditorConfig();        
+        BaseTextureBlitter blitter = CreateBlitter(capturerTex);
+        Material blitToScreenMat = renderCapturer.GetOrCreateBlitToScreenEditorMaterialV();
+        if (!blitToScreenMat.IsNullRef()) {
+            blitToScreenMat.SetColor(m_bgColorProperty, editorConfig.GetUpdateBGColor());
+            blitter.SetBlitMaterial(blitToScreenMat);            
+        }
+        
+        GameObject blitterGO = blitter.gameObject;
+        
+        
+        
 
-        TimelineClip timelineClip = timelineClipSISData.GetOwner();
+        TimelineClip timelineClip = clipData.GetOwner();
         double timePerFrame = 1.0f / track.timelineAsset.editorSettings.fps;
         
         //initial calculation of loop vars
@@ -261,7 +284,14 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
         //Store old files that has the same pattern
         string[] existingFiles = Directory.GetFiles (outputFolder, $"*.png");
         HashSet<string> filesToDelete = new HashSet<string>(existingFiles);
-       
+
+        RenderCacheOutputFormat outputFormat = renderCachePlayableAsset.GetOutputFormat();
+        string                  outputExt    = null;
+        switch (outputFormat) {
+            case RenderCacheOutputFormat.EXR: outputExt = "exr"; break;
+            default:                          outputExt = "png"; break;;
+        }
+        
         bool cancelled = false;
         while (!cancelled) {            
             
@@ -273,11 +303,11 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
             if (!captureAllFrames && fileCounter > editorConfig.GetCaptureEndFrame())
                 break;            
             
-            string fileName       = $"{prefix}{fileCounter.ToString($"D{numDigits}")}.png";
+            string fileName       = $"{prefix}{fileCounter.ToString($"D{numDigits}")}.{outputExt}";
             string outputFilePath = Path.Combine(outputFolder, fileName);
 
-            SISPlayableFrame playableFrame = timelineClipSISData.GetPlayableFrame(fileCounter);                
-            bool captureFrame = (!timelineClipSISData.AreFrameMarkersRequested() //if markers are not requested, capture
+            SISPlayableFrame playableFrame = clipData.GetPlayableFrame(fileCounter);                
+            bool captureFrame = (!clipData.AreFrameMarkersRequested() //if markers are not requested, capture
                 || !File.Exists(outputFilePath) //if file doesn't exist, capture
                 || (null!=playableFrame && playableFrame.IsUsed() && !playableFrame.IsLocked())
             );             
@@ -297,7 +327,7 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
                 
                 //Unload texture because it may be overwritten
                 StreamingImageSequencePlugin.UnloadImageAndNotify(outputFilePath);
-                renderCapturer.CaptureToFile(outputFilePath);
+                renderCapturer.CaptureToFile(outputFilePath, outputFormat);
                 
             } 
             Assert.IsTrue(File.Exists(outputFilePath));
@@ -311,7 +341,6 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
         }
 
         if (!cancelled) {
-            renderCachePlayableAsset.SetImageFiles(imageFiles);        
 
             //Delete old files
             if (AssetDatabase.IsValidFolder(outputFolder)) {
@@ -331,10 +360,12 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
                
         //Cleanup
         EditorUtility.ClearProgressBar();
-        renderCapturer.EndCapture();
-        ObjectUtility.Destroy(blitterGO);
-        
+        renderCapturer.EndCaptureV();
+        ObjectUtility.Destroy(blitterGO);        
         AssetDatabase.Refresh();
+        renderCachePlayableAsset.Reload();;
+        
+        
         
         yield return null;
 
@@ -343,7 +374,7 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
     
 //----------------------------------------------------------------------------------------------------------------------
 
-    private static GameObject CreateBlitter(Texture texToBlit, Color bgColor) {
+    private static BaseTextureBlitter CreateBlitter(Texture texToBlit) {
         GameObject           blitterGO = new GameObject("Blitter");
 
 #if AT_USE_HDRP        
@@ -356,22 +387,15 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
 #endif        
         blitter.SetSrcTexture(texToBlit);
         blitter.SetCameraDepth(int.MaxValue);
-
-        //Setup blitMaterial
-        Shader blitShader = AssetDatabase.LoadAssetAtPath<Shader>(SISEditorConstants.TRANSPARENT_BG_COLOR_SHADER_PATH);            
-        Material blitMaterial = new Material(blitShader);
-        blitMaterial.hideFlags = HideFlags.DontSaveInBuild | HideFlags.DontSaveInEditor;
-        blitMaterial.SetColor(m_bgColorProperty, bgColor);
-        blitter.SetBlitMaterial(blitMaterial);
         
-        return blitterGO;
+        return blitter;
     } 
     
     
 //----------------------------------------------------------------------------------------------------------------------
 
 
-    private void DrawCaptureSelectedFramesGUI(TimelineClip timelineClip, TimelineClipSISData timelineClipSISData) {
+    private void DrawCaptureSelectedFramesGUI(TimelineClip timelineClip, PlayableFrameClipData clipData) {
         TrackAsset   track              = timelineClip.GetParentTrack();
         
         GUILayout.BeginHorizontal();
@@ -381,11 +405,11 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
         EditorGUI.BeginDisabledGroup(!markerVisibility);        
         if (GUILayout.Button("Capture All", GUILayout.Width(80))) {
             Undo.RegisterCompleteObjectUndo(track, "Capturing all frames");
-            timelineClipSISData.SetAllPlayableFramesProperty(PlayableFramePropertyID.USED, true);
+            clipData.SetAllPlayableFramesProperty(PlayableFramePropertyID.USED, true);
         }
         if (GUILayout.Button("Reset", GUILayout.Width(50))) {
             Undo.RegisterCompleteObjectUndo(track, "Capturing no frames");
-            timelineClipSISData.SetAllPlayableFramesProperty(PlayableFramePropertyID.USED, false);            
+            clipData.SetAllPlayableFramesProperty(PlayableFramePropertyID.USED, false);            
         }
         EditorGUI.EndDisabledGroup();
         GUILayout.EndHorizontal();
@@ -395,7 +419,7 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
 //----------------------------------------------------------------------------------------------------------------------
 
 
-    private void DrawLockFramesGUI(TimelineClip timelineClip, TimelineClipSISData timelineClipSISData) {
+    private void DrawLockFramesGUI(TimelineClip timelineClip, PlayableFrameClipData clipData) {
         TrackAsset track = timelineClip.GetParentTrack();
         
         using(new EditorGUILayout.HorizontalScope()) {
@@ -405,7 +429,7 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
                 GUILayout.Height(20f), GUILayout.Width(30f));            
             if (lockMode != m_lockMode) { //lock state changed
                 if (lockMode) {
-                    LockSISData(timelineClipSISData);
+                    LockSISData(clipData);
                 } else {
                     UnlockSISData();
                 }
@@ -415,11 +439,11 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
             EditorGUI.BeginDisabledGroup(!m_lockMode);        
             if (GUILayout.Button("Lock All", GUILayout.Width(80))) {
                 Undo.RegisterCompleteObjectUndo(track, "Locking all frames");
-                timelineClipSISData.SetAllPlayableFramesProperty(PlayableFramePropertyID.LOCKED, true);
+                clipData.SetAllPlayableFramesProperty(PlayableFramePropertyID.LOCKED, true);
             }
             if (GUILayout.Button("Reset", GUILayout.Width(50))) {
                 Undo.RegisterCompleteObjectUndo(track, "Locking no frames");
-                timelineClipSISData.SetAllPlayableFramesProperty(PlayableFramePropertyID.LOCKED, false);
+                clipData.SetAllPlayableFramesProperty(PlayableFramePropertyID.LOCKED, false);
             }
             EditorGUI.EndDisabledGroup();
         }
@@ -452,23 +476,23 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
         string assetName = string.IsNullOrEmpty(m_asset.name) ? "RenderCachePlayableAsset" : m_asset.name;               
         //Generate unique folder
         string baseFolder = Path.Combine(Application.streamingAssetsPath, assetName);
-        string folder = PathUtility.GenerateUniqueFolder(baseFolder); 
+        string folder = Unity.FilmInternalUtilities.PathUtility.GenerateUniqueFolder(baseFolder); 
         m_asset.SetFolder(AssetUtility.NormalizeAssetPath(folder).Replace('\\','/'));
         Repaint();        
     }
     
 //----------------------------------------------------------------------------------------------------------------------
 
-    static void LockSISData(TimelineClipSISData timelineClipSISData) {
-        m_inspectedSISDataForLocking = timelineClipSISData;
-        m_inspectedSISDataForLocking.SetInspectedProperty(PlayableFramePropertyID.LOCKED);
+    static void LockSISData(PlayableFrameClipData clipData) {
+        m_inspectedClipDataForLocking = clipData;
+        m_inspectedClipDataForLocking.SetInspectedProperty(PlayableFramePropertyID.LOCKED);
         m_lockMode = true;
     }
     
     static void UnlockSISData() {
-        Assert.IsNotNull(m_inspectedSISDataForLocking);
-        m_inspectedSISDataForLocking.SetInspectedProperty(PlayableFramePropertyID.USED);
-        m_inspectedSISDataForLocking = null;
+        Assert.IsNotNull(m_inspectedClipDataForLocking);
+        m_inspectedClipDataForLocking.SetInspectedProperty(PlayableFramePropertyID.USED);
+        m_inspectedClipDataForLocking = null;
         m_lockMode = false;
     }
     
@@ -479,12 +503,13 @@ internal class RenderCachePlayableAssetInspector : UnityEditor.Editor {
     }        
 
 //----------------------------------------------------------------------------------------------------------------------
-
+ 
     
-    private                 RenderCachePlayableAsset m_asset                      = null;
-    private static          bool                     m_lockMode                   = false;
-    private static          TimelineClipSISData      m_inspectedSISDataForLocking = null;
-    private static readonly int                      m_bgColorProperty            = Shader.PropertyToID("_BGColor");
+    private                 RenderCachePlayableAsset m_asset                       = null;
+    private static          bool                     m_lockMode                    = false;
+    private static          PlayableFrameClipData    m_inspectedClipDataForLocking = null;
+    private static readonly int                      m_bgColorProperty             = Shader.PropertyToID("_BGColor");
+    
 }
 
 }

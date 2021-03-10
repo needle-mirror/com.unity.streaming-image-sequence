@@ -1,19 +1,36 @@
 ﻿using JetBrains.Annotations;
 using System.IO;
+using Unity.FilmInternalUtilities;
+using Unity.FilmInternalUtilities.Editor;
 using UnityEditor.Timeline;
 using UnityEngine.Timeline;
 using UnityEngine;
 using UnityEngine.Assertions;
 using UnityEditor;
+using UnityEngine.Playables;
 
 namespace Unity.StreamingImageSequence.Editor {
 
 [CustomTimelineEditor(typeof(StreamingImageSequencePlayableAsset)), UsedImplicitly]
-internal class StreamingImageSequencePlayableAssetEditor : ImageFolderPlayableAssetEditor<StreamingImageSequencePlayableAsset> 
+internal class StreamingImageSequencePlayableAssetEditor : ImageFolderPlayableAssetEditor<SISClipData> 
 {
-    private const string NO_FOLDER_ASSIGNED_ERROR = "No Folder assigned";
-    private const string FOLDER_MISSING_ERROR = "Assigned folder does not exist.";
-    private const string NO_PICTURES_ASSIGNED_ERROR = "No Pictures assigned";
+    [InitializeOnLoadMethod]
+    static void StreamingImageSequencePlayableAssetEditor_OnEditorLoad() {
+        StreamingImageSequencePlayableMixer.OnPlayableCreated   += OnSISPlayableCreated;
+        StreamingImageSequencePlayableMixer.OnPlayableDestroyed += OnSISPlayableDestroyed;
+    }
+
+    static void OnSISPlayableCreated(Playable playable, StreamingImageSequencePlayableMixer mixer) {
+        EditorApplicationManager.AddUpdateTask( new SISPlayableMixerEditorTask(mixer));
+        
+    }
+    
+    static void OnSISPlayableDestroyed(Playable playable, StreamingImageSequencePlayableMixer mixer) {
+        EditorApplicationManager.RemoveUpdateTask( new SISPlayableMixerEditorTask(mixer));        
+        
+    }
+    
+    
 
 //----------------------------------------------------------------------------------------------------------------------
     /// <inheritdoc/>
@@ -47,13 +64,12 @@ internal class StreamingImageSequencePlayableAssetEditor : ImageFolderPlayableAs
             Debug.LogError("Asset is not a StreamingImageSequencePlayableAsset: " + clip.asset);
             return;
         }
-        
-        StreamingImageSequenceTrack sisTrack = track as StreamingImageSequenceTrack;
-        Assert.IsNotNull(sisTrack);
-        
 
-        //This callback occurs before the clip is assigned to the track, but we need the track for creating curves.
-        clip.TryMoveToTrack(track); 
+        //[Note-sin: 2021-2-25] Track can be null during copy and paste
+        if (null != track) {
+            //This callback occurs before the clip is assigned to the track, but we need the track for creating curves.
+            clip.TryMoveToTrack(track);             
+        }
         
         //If we have a default asset, and clonedFrom is NULL, which means this is created by user interaction,
         //such as Folder D&D
@@ -71,16 +87,12 @@ internal class StreamingImageSequencePlayableAssetEditor : ImageFolderPlayableAs
                 clip.duration = (double) (numImages) / (userSettings.GetDefaultSISPlayableAssetFPS()); 
                 clip.displayName = Path.GetFileName(asset.GetFolder());
             }
-            clip.CreateCurves("Curves: " + clip.displayName);
+
+            ExtendedClipEditorUtility.CreateTimelineClipCurve(clip,StreamingImageSequencePlayableAsset.GetTimeCurveBinding());
         }
-
-
-        TimelineClipSISData sisData = null;
-        asset.InitTimelineClipCurve(clip);
         
         if (null == clonedFrom) {
-            sisData = new TimelineClipSISData(clip);
-            asset.BindTimelineClipSISData(sisData);
+            asset.BindClipData(new SISClipData(clip));
             return;
         }
 
@@ -88,13 +100,45 @@ internal class StreamingImageSequencePlayableAssetEditor : ImageFolderPlayableAs
         StreamingImageSequencePlayableAsset clonedFromAsset = clonedFrom.asset as StreamingImageSequencePlayableAsset;
         Assert.IsNotNull(clonedFromAsset);
         
-        TimelineClipSISData otherSISData = clonedFromAsset.GetBoundTimelineClipSISData();
-        sisData = new TimelineClipSISData(clip, otherSISData);
-        asset.BindTimelineClipSISData(sisData);
+        SISClipData otherSISData = clonedFromAsset.GetBoundClipData();
+
+        if (null == otherSISData) {            
+            asset.BindClipData(new SISClipData(clip)); //[Note-sin: 2021-2-25] can be null during copy and paste
+            return;
+        }
+        
+        SISClipData sisData = new SISClipData(clip, otherSISData);
+        asset.BindClipData(sisData);
         clip.displayName = clonedFrom.displayName + " (Cloned)";
 
     }
 
+    
+//----------------------------------------------------------------------------------------------------------------------
+    //Called when a clip is changed by the Editor. (TrimStart, TrimEnd, etc)    
+    public override void OnClipChanged(TimelineClip clip) {       
+        base.OnClipChanged(clip);
+        
+        StreamingImageSequencePlayableAsset sisAsset = clip.asset as StreamingImageSequencePlayableAsset;               
+        if (null == sisAsset) {
+            Debug.LogError("[SIS] Clip Internal Error: Invalid Asset");
+            return;
+        } 
+        
+        EditorCurveBinding      curveBinding = StreamingImageSequencePlayableAsset.GetTimeCurveBinding();
+        AnimationCurve          curve = ExtendedClipEditorUtility.ValidateTimelineClipCurve(clip, curveBinding);
+                
+        //Always set the curve to clipData
+        ExtendedClipEditorUtility.SetClipDataCurve<SISClipData>(sisAsset, curve);
+
+        
+    }
+
+//----------------------------------------------------------------------------------------------------------------------    
+    
+    
+    
+    
 //----------------------------------------------------------------------------------------------------------------------
 
     private static void InitializeAssetFromDefaultAsset(StreamingImageSequencePlayableAsset playableAsset,
@@ -108,8 +152,11 @@ internal class StreamingImageSequencePlayableAssetEditor : ImageFolderPlayableAs
     
 //----------------------------------------------------------------------------------------------------------------------
     protected override void DrawPreviewImageV(ref PreviewDrawInfo drawInfo, TimelineClip clip, 
-        StreamingImageSequencePlayableAsset sisAsset) 
+        ImageFolderPlayableAsset<SISClipData> playableAsset) 
     {
+        StreamingImageSequencePlayableAsset sisAsset = playableAsset as StreamingImageSequencePlayableAsset;
+        Assert.IsNotNull(sisAsset);
+        
         int imageIndex = sisAsset.LocalTimeToImageIndex(clip, drawInfo.LocalTime);       
         string imagePath = sisAsset.GetImageFilePath(imageIndex);
         PreviewUtility.DrawPreviewImage(ref drawInfo, imagePath);
@@ -119,6 +166,10 @@ internal class StreamingImageSequencePlayableAssetEditor : ImageFolderPlayableAs
 
 //----------------------------------------------------------------------------------------------------------------------
 
+    private const string NO_FOLDER_ASSIGNED_ERROR   = "No Folder assigned";
+    private const string FOLDER_MISSING_ERROR       = "Assigned folder does not exist.";
+    private const string NO_PICTURES_ASSIGNED_ERROR = "No Pictures assigned";
+    
 }
 
 } //end namespace

@@ -5,7 +5,10 @@ using UnityEngine.Assertions;
 
 #if AT_USE_PENCILLINE
 using Pencil_4;
+#endif
 
+#if UNITY_EDITOR
+using UnityEditor;
 #endif
 
 namespace Unity.StreamingImageSequence {
@@ -15,7 +18,7 @@ namespace Unity.StreamingImageSequence {
 internal class PencilLineRenderCapturer : BaseRenderCapturer {
 
 
-    public override bool CanCapture() {
+    public override bool CanCaptureV() {
 #if AT_USE_PENCILLINE
         if (null == m_pencilLineEffect) {
             SetErrorMessage("PencilLineEffect is not set on " + gameObject.name);
@@ -39,7 +42,7 @@ internal class PencilLineRenderCapturer : BaseRenderCapturer {
     }
     
     /// <inheritdoc/>
-    public override IEnumerator BeginCapture() {
+    public override IEnumerator BeginCaptureV() {
 #if AT_USE_PENCILLINE
 
         Assert.IsNotNull(m_pencilLineEffect);
@@ -63,7 +66,7 @@ internal class PencilLineRenderCapturer : BaseRenderCapturer {
     }
 
     /// <inheritdoc/>
-    public override void EndCapture() {        
+    public override void EndCaptureV() {        
 #if AT_USE_PENCILLINE
         Assert.IsNotNull(m_pencilLineEffect);
         m_pencilLineEffect.enabled = m_prevPencilLineEffectEnabled;
@@ -75,19 +78,41 @@ internal class PencilLineRenderCapturer : BaseRenderCapturer {
 //----------------------------------------------------------------------------------------------------------------------
 
     /// <inheritdoc/>
-    protected override RenderTexture UpdateRenderTexture() {
+    protected override RenderTexture UpdateRenderTextureV() {
 #if AT_USE_PENCILLINE
         Graphics.Blit(m_pencilTex, m_rt);
 #endif
         return m_rt;
     }
     
+//----------------------------------------------------------------------------------------------------------------------
+
+#if UNITY_EDITOR
+    
+    public override Material GetOrCreateBlitToScreenEditorMaterialV() {
+        if (null != m_blitToScreenEditorMaterial)
+            return m_blitToScreenEditorMaterial;
+        
+        //Setup blitMaterial
+        Shader blitShader = AssetDatabase.LoadAssetAtPath<Shader>(StreamingImageSequenceConstants.TRANSPARENT_BG_COLOR_SHADER_PATH);            
+        m_blitToScreenEditorMaterial = new Material(blitShader);
+        m_blitToScreenEditorMaterial.hideFlags = HideFlags.DontSaveInBuild | HideFlags.DontSaveInEditor;
+        return m_blitToScreenEditorMaterial;
+    }
+    
+
+#endif //UNITY_EDITOR    
     
 //----------------------------------------------------------------------------------------------------------------------
+
 #if AT_USE_PENCILLINE
     [SerializeField] private PencilLineEffect m_pencilLineEffect        = null;
     private                  Texture2D        m_pencilTex               = null;
     private                  bool             m_prevPencilLineEffectEnabled = false;
+#endif
+
+#if UNITY_EDITOR
+    private static Material m_blitToScreenEditorMaterial = null;
 #endif
 
 

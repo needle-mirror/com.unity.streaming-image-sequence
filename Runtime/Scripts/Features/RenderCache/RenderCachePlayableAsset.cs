@@ -1,8 +1,4 @@
-﻿using System.Collections.Generic;
-using System.IO;
-using JetBrains.Annotations;
-using UnityEngine;
-using UnityEngine.Assertions;
+﻿using UnityEngine;
 using UnityEngine.Playables;
 using UnityEngine.Timeline;
 
@@ -15,11 +11,11 @@ namespace Unity.StreamingImageSequence {
 /// - ISerializationCallbackReceiver: to perform version upgrade, if necessary
 /// </summary>
 [System.Serializable]
-internal class RenderCachePlayableAsset : ImageFolderPlayableAsset, ITimelineClipAsset, ISerializationCallbackReceiver {
-    protected override void ReloadInternalV() {
-        ResetResolution();            
-    }        
-    
+internal class RenderCachePlayableAsset : ImageFolderPlayableAsset<RenderCacheClipData>, ITimelineClipAsset, ISerializationCallbackReceiver {
+
+    RenderCachePlayableAsset() : base() {
+        m_editorConfig = new RenderCachePlayableAssetEditorConfig();                 
+    }
 //----------------------------------------------------------------------------------------------------------------------
     public void OnGraphStart(Playable playable) {
     }
@@ -73,21 +69,25 @@ internal class RenderCachePlayableAsset : ImageFolderPlayableAsset, ITimelineCli
     
 //----------------------------------------------------------------------------------------------------------------------
 
-    internal void SetImageFiles(List<WatchedFileInfo> imageFiles) { m_imageFiles = imageFiles; }
-
     internal RenderCachePlayableAssetEditorConfig GetEditorConfig() { return m_editorConfig;}
+
+    internal RenderCacheOutputFormat GetOutputFormat()                  { return m_outputFormat;        }
+    internal void SetOutputFormat(RenderCacheOutputFormat outputFormat) { m_outputFormat = outputFormat;}
     
 //----------------------------------------------------------------------------------------------------------------------
     
 #if UNITY_EDITOR
+    protected override void ReloadInternalInEditorV() {
+        ResetResolution();            
+    }        
     protected override string[] GetSupportedImageFilePatternsV() { return m_imageFilePatterns; }
     
-#endif
+#endif //UNITY_EDITOR
     
 //----------------------------------------------------------------------------------------------------------------------
 
-    //[TODO-sin: 2020-11-4] Obsolete 
-    [HideInInspector][SerializeField] private Color m_updateBGColor = Color.black;
+    [HideInInspector][SerializeField] private RenderCacheOutputFormat m_outputFormat  = RenderCacheOutputFormat.PNG;
+    [HideInInspector][SerializeField] private Color                   m_updateBGColor = Color.black;
     
     [HideInInspector][SerializeField] private int m_version = (int) RenderCachePlayableAssetVersion.INITIAL_0_0;
     [HideInInspector][SerializeField] private RenderCachePlayableAssetEditorConfig m_editorConfig;
@@ -96,6 +96,7 @@ internal class RenderCachePlayableAsset : ImageFolderPlayableAsset, ITimelineCli
 #if UNITY_EDITOR
     private static readonly string[] m_imageFilePatterns = {
         "*.png",
+        "*.exr",
     };        
 #endif
     

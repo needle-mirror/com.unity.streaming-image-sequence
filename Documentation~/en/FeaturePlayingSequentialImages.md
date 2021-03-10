@@ -2,9 +2,10 @@
 
 1. [Quick Start](#quick-start)
 1. [Supported Image Formats](#supported-image-formats)
+1. [Folder Tradeoffs](#folder-tradeoffs)
 1. [FrameMarker](#framemarker)
 1. [Gap Extrapolation](#gap-extrapolation)
-1. [Curve Editing (Editor only)](#curve-editing-editor-only)
+1. [Curve Editing](#curve-editing)
 1. [StreamingImageSequencePlayableAsset](#streamingimagesequenceplayableasset)
 
 
@@ -43,10 +44,37 @@ For other ways for importing images, see [ImportingImages](ImportingImages.md).
 
 ## Supported Image Formats
 
-|             | Windows            | Mac                | Linux              |
-| ----------- | ------------------ | ------------------ | ------------------ |
-| png         | :white_check_mark: | :white_check_mark: | :white_check_mark: |       
-| tga         | :white_check_mark: | :white_check_mark: | :white_check_mark: |    
+|             | Windows              | Mac                  | Linux                |
+| ----------- | -------------------- | -------------------- | -------------------- |
+| png         | :heavy_check_mark:   | :heavy_check_mark:   | :heavy_check_mark:   |       
+| tga         | :heavy_check_mark:   | :heavy_check_mark:   | :heavy_check_mark:   |    
+| exr         | :small_red_triangle: | :small_red_triangle: | :small_red_triangle: |    
+
+For exr support, please refer to [Folder Tradeoffs](#folder-tradeoffs).
+
+## Folder Tradeoffs
+
+The behaviour of [StreamingImageSequencePlayableAsset](#streamingimagesequenceplayableasset)
+differs based on the folder where the images are stored.  
+Please refer to the following table for more details.
+
+|                                   | Outside Unity Project                                                                                    | Inside Assets, outside StreamingAssets                 | Inside StreamingAssets|
+| --------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ------------------ |
+| Tex import time                   | None                                                                                                     | Varies according to tex size and tex importer settings | None |       
+| Tex quality                       | RGBA 32 bit, no POT scaling                                                                              | Varies according to tex size and tex importer settings | RGBA 32 bit, no POT scaling |    
+| CPU to GPU tex upload cost        | Everytime the active tex changed                                                                         | None                                                   | Everytime the active tex changed |    
+| CPU mem. usage of tex in Editor   | Textures are preloaded as much as possible. See [Editor Memory Usage](#editor-memory-usage) for details. | None                                                   | Textures are preloaded as much as possible. See [Editor Memory Usage](#editor-memory-usage) for details. |    
+| CPU mem. usage of tex in Runtime  | Not supported in Runtime                                                                                 | Not supported in Runtime                               | Textures up to a certain number of frames in advance are preloaded |    
+| exr Support                       | No                                                                                                       | Editor only                                            | No |    
+
+### Editor Memory Usage
+
+For applicable image folders, StreamingImageSequence allocates CPU memory to preload as many images as possible, 
+ensuring smooth image playback in the Editor.    
+This allocation is set to satisfy the following requirements:
+1. Does not exceed 90% of the total physical memory of the system.
+2. Does not exceed the maximum amount of memory, which can be configured in [Preferences](Preferences.md).
+
 
 ## FrameMarker
 
@@ -74,15 +102,12 @@ using one of the following options:
 By default, StreamingImageSequencePlayableAsset sets both Pre-Extrapolate and Post-Extrapolate properties to **None**.
 
 
-## Curve Editing (Editor only)
+## Curve Editing
 
 In the editor, we can modify the timing of the playback by 
 1. opening the curve section
 2. right clicking on the curve to add keys
 3. moving the keys accordingly
-
-This is currently only supported in the editor, 
-and the playback timing will always be linear in runtime.
 
 ![StreamingImageSequenceCurve](../images/StreamingImageSequenceCurve.png)
 

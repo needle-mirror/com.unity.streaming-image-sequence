@@ -110,7 +110,7 @@ internal class FrameMarkerInspector: UnityEditor.Editor {
     {
         //Find the correct imageIndex. The number of frames in the clip may be more/less than the number of images
         int playableFrameIndex = playableFrame.GetIndex();
-        int numPlayableFrames  = sisPlayableAsset.GetBoundTimelineClipSISData().GetNumPlayableFrames();
+        int numPlayableFrames  = sisPlayableAsset.GetBoundClipData().GetNumPlayableFrames();
         
         int numImages = sisPlayableAsset.GetNumImages();
         int index     = Mathf.FloorToInt(playableFrameIndex * ((float) numImages / numPlayableFrames));
@@ -128,9 +128,9 @@ internal class FrameMarkerInspector: UnityEditor.Editor {
     
 //----------------------------------------------------------------------------------------------------------------------
     private static void SetMarkerValueByContext(FrameMarker frameMarker, bool value) {
-        SISPlayableFrame    playableFrame       = frameMarker.GetOwner();
-        TimelineClipSISData timelineClipSISData = playableFrame.GetOwner();
-        PlayableFramePropertyID inspectedPropertyID = timelineClipSISData.GetInspectedProperty();
+        SISPlayableFrame      playableFrame = frameMarker.GetOwner();
+        PlayableFrameClipData clipData      = playableFrame.GetOwner();
+        PlayableFramePropertyID inspectedPropertyID = clipData.GetInspectedProperty();
         switch (inspectedPropertyID) {
             case PlayableFramePropertyID.USED: {
                 playableFrame.SetUsed(value);
@@ -147,9 +147,9 @@ internal class FrameMarkerInspector: UnityEditor.Editor {
     
 
     internal static void ToggleMarkerValueByContext(FrameMarker frameMarker) {
-        SISPlayableFrame    playableFrame         = frameMarker.GetOwner();
-        TimelineClipSISData timelineClipSISData   = playableFrame.GetOwner();
-        PlayableFramePropertyID inspectedPropertyID = timelineClipSISData.GetInspectedProperty();
+        SISPlayableFrame      playableFrame = frameMarker.GetOwner();
+        PlayableFrameClipData clipData      = playableFrame.GetOwner();
+        PlayableFramePropertyID inspectedPropertyID = clipData.GetInspectedProperty();
         switch (inspectedPropertyID) {
             case PlayableFramePropertyID.USED: {
                 playableFrame.SetUsed(!playableFrame.IsUsed());

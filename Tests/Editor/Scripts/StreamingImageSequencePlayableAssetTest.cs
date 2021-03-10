@@ -18,7 +18,7 @@ internal class StreamingImageSequencePlayableAssetTest {
     [UnityTest]
     public IEnumerator CreatePlayableAsset() {
         PlayableDirector director = EditorUtilityTest.NewSceneWithDirector();
-        TimelineClip clip = EditorUtilityTest.CreateTestTimelineClip(director);
+        TimelineClip clip = EditorUtilityTest.CreateTestSISTimelineClip(director);
         StreamingImageSequencePlayableAsset sisAsset = clip.asset as StreamingImageSequencePlayableAsset;
         Assert.IsNotNull(sisAsset);
         
@@ -50,13 +50,15 @@ internal class StreamingImageSequencePlayableAssetTest {
     [UnityTest]
     public IEnumerator ResizePlayableAsset() {
         PlayableDirector director = EditorUtilityTest.NewSceneWithDirector();
-        TimelineClip                        clip     = EditorUtilityTest.CreateTestTimelineClip(director);
+        TimelineClip                        clip     = EditorUtilityTest.CreateTestSISTimelineClip(director);
         StreamingImageSequencePlayableAsset sisAsset = clip.asset as StreamingImageSequencePlayableAsset;
         Assert.IsNotNull(sisAsset);
-        TimelineClipSISData timelineClipSISData = sisAsset.GetBoundTimelineClipSISData();
+        SISClipData clipData = sisAsset.GetBoundClipData();
         yield return null;
         
-        timelineClipSISData.RequestFrameMarkers(true, true); 
+        Assert.IsNotNull(clipData);
+        
+        clipData.RequestFrameMarkers(true, true); 
         Undo.IncrementCurrentGroup(); //the base of undo is here. FrameMarkerVisibility is still true after undo
         TimelineEditor.Refresh(RefreshReason.ContentsModified);
         yield return null;
@@ -93,7 +95,7 @@ internal class StreamingImageSequencePlayableAssetTest {
     [UnityTest]
     public IEnumerator ReloadPlayableAsset() {
         PlayableDirector                    director = EditorUtilityTest.NewSceneWithDirector();
-        TimelineClip                        clip     = EditorUtilityTest.CreateTestTimelineClip(director);
+        TimelineClip                        clip     = EditorUtilityTest.CreateTestSISTimelineClip(director);
         StreamingImageSequencePlayableAsset sisAsset = clip.asset as StreamingImageSequencePlayableAsset;
         Assert.IsNotNull(sisAsset);
         
@@ -135,7 +137,7 @@ internal class StreamingImageSequencePlayableAssetTest {
     [UnityTest]
     public IEnumerator ImportFromStreamingAssets() {
         PlayableDirector                    director = EditorUtilityTest.NewSceneWithDirector();
-        TimelineClip                        clip     = EditorUtilityTest.CreateTestTimelineClip(director);
+        TimelineClip                        clip     = EditorUtilityTest.CreateTestSISTimelineClip(director);
         StreamingImageSequencePlayableAsset sisAsset = clip.asset as StreamingImageSequencePlayableAsset;
         Assert.IsNotNull(sisAsset);
         

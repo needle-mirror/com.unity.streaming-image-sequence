@@ -7,7 +7,7 @@ using UnityEngine.Assertions;
 namespace Unity.StreamingImageSequence.Editor {
 
 [CustomTimelineEditor(typeof(RenderCachePlayableAsset)), UsedImplicitly]
-internal class RenderCachePlayableAssetEditor : ImageFolderPlayableAssetEditor<RenderCachePlayableAsset> 
+internal class RenderCachePlayableAssetEditor : ImageFolderPlayableAssetEditor<RenderCacheClipData>
 {
 
 
@@ -17,17 +17,15 @@ internal class RenderCachePlayableAssetEditor : ImageFolderPlayableAssetEditor<R
     public override void OnCreate(TimelineClip clip, TrackAsset track, TimelineClip clonedFrom) {
         RenderCachePlayableAsset asset = clip.asset as RenderCachePlayableAsset;
         Assert.IsNotNull(asset);
-
-        clip.TryMoveToTrack(track); 
         
-        TimelineClipSISData sisData = new TimelineClipSISData(clip);        
-        asset.BindTimelineClipSISData(sisData);
+        RenderCacheClipData sisData = new RenderCacheClipData(clip);        
+        asset.BindClipData(sisData);
     }
     
 //----------------------------------------------------------------------------------------------------------------------    
     
     protected override void DrawPreviewImageV(ref PreviewDrawInfo drawInfo, TimelineClip clip, 
-        RenderCachePlayableAsset renderCachePlayableAsset) 
+        ImageFolderPlayableAsset<RenderCacheClipData> renderCachePlayableAsset) 
     {        
         double        normalizedLocalTime = drawInfo.LocalTime / clip.duration;
         int           numImages           = renderCachePlayableAsset.GetNumImages();

@@ -1,10 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using JetBrains.Annotations;
-using UnityEditor;
+using Unity.FilmInternalUtilities;
+
 using UnityEngine;
 using UnityEngine.Assertions;
+
+#if UNITY_EDITOR
+using UnityEditor;
+using UnityEditor.Timeline;
+#endif
+
 
 namespace Unity.StreamingImageSequence {
 
@@ -12,7 +18,9 @@ namespace Unity.StreamingImageSequence {
 /// A PlayableAsset that points to a folder that contains images
 /// </summary>
 [System.Serializable]
-internal abstract class ImageFolderPlayableAsset : BaseTimelineClipSISDataPlayableAsset {
+internal abstract class ImageFolderPlayableAsset<T> : BaseExtendedClipPlayableAsset<T>, IReloader
+    where T: PlayableFrameClipData
+{
     private void Awake() {
         //Find the used folder in runtime. Unused in the editor        
         const string EDITOR_STREAMING_ASSETS_PATH = "Assets/StreamingAssets/";  
@@ -23,10 +31,7 @@ internal abstract class ImageFolderPlayableAsset : BaseTimelineClipSISDataPlayab
         
     }
     
-//----------------------------------------------------------------------------------------------------------------------
-
-    protected abstract void ReloadInternalV();
-    
+   
 //----------------------------------------------------------------------------------------------------------------------
     
 #region Resolution    
@@ -47,14 +52,27 @@ internal abstract class ImageFolderPlayableAsset : BaseTimelineClipSISDataPlayab
             || null == m_imageFiles || m_imageFiles.Count <= 0)
             return;
 
-        //Get the first image to update the resolution.    
-        string fullPath = GetFirstImageData(out ImageData imageData);
+        //Get the first image to update the resolution.       
+        string fullPath = GetImageFilePath(0);
+        
+        //Try to do direct image loading
+        if (m_folder.IsRegularAssetPath()) {        
+            Texture2D tex = AssetDatabase.LoadAssetAtPath<Texture2D>(fullPath);
+            if (null != tex) {
+                UpdateResolution(tex);
+                Resources.UnloadAsset(tex);                
+                return;
+            }
+        }
+        
+        const int TEX_TYPE = StreamingImageSequenceConstants.IMAGE_TYPE_FULL;        
+        ImageLoader.GetImageDataInto(fullPath,TEX_TYPE, out ImageData imageData);
         switch (imageData.ReadStatus) {
             case StreamingImageSequenceConstants.READ_STATUS_LOADING: {
                 break;
             }
             case StreamingImageSequenceConstants.READ_STATUS_SUCCESS: {
-                UpdateResolution(ref imageData);
+                UpdateResolution(imageData);
                 break;
             }
             default: {
@@ -69,21 +87,30 @@ internal abstract class ImageFolderPlayableAsset : BaseTimelineClipSISDataPlayab
         m_dimensionRatio = 0;
     }
     
-    protected void UpdateResolution(ref ImageData imageData) {
+    protected void UpdateResolution(ImageData imageData) {
         m_resolution.Width  = imageData.Width;
         m_resolution.Height = imageData.Height;
-        if (m_resolution.Width > 0 && m_resolution.Height > 0) {
-            m_dimensionRatio = m_resolution.CalculateRatio();
-        }
+        CalculateDimensionRatio();
     }
 
+    protected void UpdateResolution(Texture tex) {
+        m_resolution.Width  = tex.width;
+        m_resolution.Height = tex.height;
+        CalculateDimensionRatio();
+    }
+    
     protected void UpdateResolution(ImageDimensionInt res) {
         m_resolution = res;
         m_dimensionRatio = 0;
+        CalculateDimensionRatio();
+    }
+
+    private void CalculateDimensionRatio() {
         if (m_resolution.Width > 0 && m_resolution.Height > 0) {
             m_dimensionRatio = m_resolution.CalculateRatio();
-        }        
+        }                
     }
+    
     
 #endregion Resolution
     
@@ -128,20 +155,6 @@ internal abstract class ImageFolderPlayableAsset : BaseTimelineClipSISDataPlayab
 
 
 //----------------------------------------------------------------------------------------------------------------------    
-    
-    string GetFirstImageData(out ImageData imageData) {
-        Assert.IsFalse(string.IsNullOrEmpty(m_folder));
-        Assert.IsTrue(Directory.Exists(m_folder));
-        Assert.IsTrue(m_imageFiles.Count > 0);
-
-        const int TEX_TYPE = StreamingImageSequenceConstants.IMAGE_TYPE_FULL;        
-
-        string fullPath = Path.GetFullPath(Path.Combine(m_folder, m_imageFiles[0].GetName()));
-        ImageLoader.GetImageDataInto(fullPath,TEX_TYPE, out imageData);
-        return fullPath;               
-    }
-    
-//----------------------------------------------------------------------------------------------------------------------    
 
 #if UNITY_EDITOR    
 
@@ -154,7 +167,7 @@ internal abstract class ImageFolderPlayableAsset : BaseTimelineClipSISDataPlayab
      * 3. When Unity Editor Application becomes active
      */       
 
-    internal void Reload() {        
+    public void Reload() {        
         if (string.IsNullOrEmpty(m_folder) || !Directory.Exists(m_folder))
             return;
 
@@ -184,45 +197,20 @@ internal abstract class ImageFolderPlayableAsset : BaseTimelineClipSISDataPlayab
         }
 
         m_imageFiles = newImageFiles;
-        ReloadInternalV();
+        ReloadInternalInEditorV();
         EditorUtility.SetDirty(this);
         
     }
+
+    protected abstract void ReloadInternalInEditorV();
     
-    internal static List<WatchedFileInfo> FindFiles(string path, string[] filePatterns) {
-        return FindFilesInternal(path, filePatterns);
-    }
 
     internal List<WatchedFileInfo> FindImages(string path) {
-        return FindFilesInternal(path, GetSupportedImageFilePatternsV());
+        return WatchedFileInfo.FindFiles(path, GetSupportedImageFilePatternsV());
     }
 
     //Return WatchedFileInfos (with file names)
-    private static List<WatchedFileInfo> FindFilesInternal(string path, string[] filePatterns) {
-        Assert.IsFalse(string.IsNullOrEmpty(path), "Path is null or empty");
-        Assert.IsTrue(Directory.Exists(path),$"Path {path} does not exist");
-
-        //Convert path to folder here
-        string fullSrcPath = Path.GetFullPath(path).Replace("\\", "/");
-
-        //Enumerate all files with the supported extensions and sort
-        List<WatchedFileInfo> watchedFileInfos = new List<WatchedFileInfo>();
-        foreach (string pattern in filePatterns) {
-            IEnumerable<string> files = Directory.EnumerateFiles(fullSrcPath, pattern, SearchOption.TopDirectoryOnly);
-            foreach (string filePath in files) {
-                string fileName = Path.GetFileName(filePath);
-                FileInfo fileInfo = new FileInfo(filePath);
-                watchedFileInfos.Add(new WatchedFileInfo(fileName, fileInfo.Length));
-            }
-        }
-        watchedFileInfos.Sort(FileNameComparer);
         
-        return watchedFileInfos;
-    }        
-        
-    private static int FileNameComparer(WatchedFileInfo  x, WatchedFileInfo y) {
-        return string.Compare(x.GetName(), y.GetName(), StringComparison.InvariantCultureIgnoreCase);
-    }
 
     protected abstract string[] GetSupportedImageFilePatternsV();
     
@@ -235,9 +223,32 @@ internal abstract class ImageFolderPlayableAsset : BaseTimelineClipSISDataPlayab
         StreamingImageSequencePlugin.UnloadImageAndNotify(imagePath);
     }
     
-//----------------------------------------------------------------------------------------------------------------------    
     
 #endif  //End #if UNITY_EDITOR Editor
+    
+//----------------------------------------------------------------------------------------------------------------------    
+    
+#region PlayableFrames
+
+    internal void ResetPlayableFrames() {
+#if UNITY_EDITOR
+        Undo.RegisterCompleteObjectUndo(this, "Resetting PlayableFrames");
+#endif
+        GetBoundClipData()?.ResetPlayableFrames(); //Null check. the data might not have been bound during recompile
+            
+#if UNITY_EDITOR 
+        TimelineEditor.Refresh(RefreshReason.ContentsAddedOrRemoved );
+#endif            
+           
+    }
+
+    internal void RefreshPlayableFrames() {
+
+        PlayableFrameClipData clipData = GetBoundClipData();               
+        clipData?.RefreshPlayableFrames(); //Null check. the data might not have been bound during recompile            
+    }
+        
+#endregion
     
 //----------------------------------------------------------------------------------------------------------------------    
     [HideInInspector][SerializeField] protected string       m_folder         = null;

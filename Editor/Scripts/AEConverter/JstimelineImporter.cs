@@ -129,7 +129,7 @@ internal class JstimelineImporter : ScriptedImporter
             List<WatchedFileInfo> imageFiles = WatchedFileInfo.CreateList(footageInfo.Folder, footageInfo.Pictures);
 
             StreamingImageSequencePlayableAsset sisAsset = ScriptableObject.CreateInstance<StreamingImageSequencePlayableAsset>();
-            sisAsset.InitFolder(footageInfo.Folder, imageFiles, footageInfo.Resolution);
+            sisAsset.InitFolderInEditor(footageInfo.Folder, imageFiles, footageInfo.Resolution);
 
             string playableAssetPath = Path.Combine(timelineFolder, strFootageName + "_StreamingImageSequence.playable");
             AssetEditorUtility.OverwriteAsset(sisAsset, playableAssetPath);
@@ -141,9 +141,9 @@ internal class JstimelineImporter : ScriptedImporter
             clip.duration = track.Duration;
             clip.CreateCurves("Curves: " + clip.displayName);
             
-            TimelineClipSISData sisData = new TimelineClipSISData(clip);
-            sisAsset.InitTimelineClipCurve(clip);
-            sisAsset.BindTimelineClipSISData(sisData);
+            SISClipData sisData = new SISClipData(clip);
+            sisAsset.BindClipData(sisData);
+            ExtendedClipEditorUtility.ResetClipDataCurve(sisAsset, StreamingImageSequencePlayableAsset.GetTimeCurveBinding());
 
 
             if (Object.FindObjectOfType(typeof(UnityEngine.EventSystems.EventSystem)) == null)

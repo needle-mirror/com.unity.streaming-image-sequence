@@ -74,7 +74,7 @@ internal class StreamingImageSequencePlayableAssetInspector : UnityEditor.Editor
                 if (0 == numImages)
                     EditorGUILayout.IntField("FPS", 0);
                 else {
-                    TimelineClip clip = m_asset.GetBoundTimelineClipSISData()?.GetOwner();
+                    TimelineClip clip = m_asset.GetBoundClipData()?.GetOwner();
                     //There is no assigned clip if the playableAsset is not loaded in TimelineWindow
                     if (null != clip) {                         
                         float curFPS = numImages / (float)(clip.duration);
@@ -136,8 +136,9 @@ internal class StreamingImageSequencePlayableAssetInspector : UnityEditor.Editor
 
         
         if (GUILayout.Button("Reset Curve (Not Undoable)")) {
-            //AnimationClip.SetCurve() doesn't seem to be undoable
-            StreamingImageSequencePlayableAsset.ResetTimelineClipCurve(TimelineEditor.selectedClip);
+            //AnimationUtility.SetEditorCurve(), which is called below, doesn't seem to be undoable
+            EditorCurveBinding curveBinding = StreamingImageSequencePlayableAsset.GetTimeCurveBinding();                 
+            ExtendedClipEditorUtility.ResetClipDataCurve(m_asset, curveBinding);
         }
     }
 

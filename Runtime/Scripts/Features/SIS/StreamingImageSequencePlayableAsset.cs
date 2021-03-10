@@ -25,7 +25,7 @@ namespace Unity.StreamingImageSequence {
 /// - ISerializationCallbackReceiver: to perform version upgrade, if necessary
 /// </summary>
 [System.Serializable]
-internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, ITimelineClipAsset
+internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset<SISClipData>, ITimelineClipAsset
                                                  , IPlayableBehaviour, IObserver<string>, ISerializationCallbackReceiver
 {      
     
@@ -123,9 +123,14 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
     //Calculate the used image index for the passed localTime
     internal int LocalTimeToImageIndex(TimelineClip clip, double localTime) {
 
-        TimelineClipSISData timelineSISData = GetBoundTimelineClipSISData();
+        SISClipData clipData = GetBoundClipData();
+        if (null == clipData) {
+            return 0;
+        }
 
-        if (null != timelineSISData) {
+
+        {
+            //drop disabled frames            
             double scaledTimePerFrame = TimelineUtility.CalculateTimePerFrame(clip) * clip.timeScale;            
       
             //Try to check if this frame is "dropped", so that we should use the image in the prev frame
@@ -133,16 +138,17 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
             if (playableFrameIndex < 0)
                 return 0;
                 
-            SISPlayableFrame playableFrame      = timelineSISData.GetPlayableFrame(playableFrameIndex);
+            SISPlayableFrame playableFrame      = clipData.GetPlayableFrame(playableFrameIndex);
             while (playableFrameIndex > 0 && !playableFrame.IsUsed()) {
                 --playableFrameIndex;
-                playableFrame = timelineSISData.GetPlayableFrame(playableFrameIndex);
+                playableFrame = clipData.GetPlayableFrame(playableFrameIndex);
                 localTime     = playableFrameIndex * scaledTimePerFrame;
             }                
         }
 
+        AnimationCurve curve = clipData.GetAnimationCurve();
+        double imageSequenceTime = curve.Evaluate((float) localTime);
 
-        double imageSequenceTime = LocalTimeToCurveTime(clip, localTime);
         int count = m_imageFiles.Count;
         
         //Can't round up, because if the time for the next frame hasn't been reached, then we should stick 
@@ -151,11 +157,6 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
         return index;
     }
 
-//----------------------------------------------------------------------------------------------------------------------
-    private static double LocalTimeToCurveTime(TimelineClip clip, double localTime) {
-        GetAndValidateAnimationCurve(clip, out AnimationCurve curve);                       
-        return curve.Evaluate((float)(localTime));
-    }
     
 //----------------------------------------------------------------------------------------------------------------------        
     private void Reset() {
@@ -169,13 +170,6 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
         ResetResolution();
     }
 
-//----------------------------------------------------------------------------------------------------------------------        
-    protected override void ReloadInternalV() {
-        m_lastCopiedImageIndex = -1;
-        ResetResolution();
-        RequestLoadImage(m_primaryImageIndex);
-        
-    }        
 //----------------------------------------------------------------------------------------------------------------------        
     
     /// <inheritdoc/>
@@ -207,12 +201,22 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
     internal void RequestLoadImage(int index) {
         int numImages = m_imageFiles.Count;
         
-        if (null == m_imageFiles || index < 0 || index >= numImages 
-            || string.IsNullOrEmpty(m_imageFiles[index].GetName())) {
+        if (null == m_imageFiles || index < 0 || index >= numImages) 
             return;
-        }
+
+        string fullPath = GetImageFilePath(index);
+        if (string.IsNullOrEmpty(fullPath))
+            return;
 
         m_primaryImageIndex = index;
+        
+#if UNITY_EDITOR        
+        if (fullPath.IsRegularAssetPath()) {
+            UpdateTextureAsRegularAssetInEditor(fullPath, m_primaryImageIndex);
+            return;
+        }
+#endif        
+        
 
         if (QueueImageLoadTask(index, out ImageData readResult)) {
             m_forwardPreloadImageIndex  = Mathf.Min(m_primaryImageIndex + 1, numImages - 1);
@@ -239,6 +243,13 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
         if (string.IsNullOrEmpty(fullPath) || !File.Exists(fullPath))
             return false;
 
+#if UNITY_EDITOR        
+        if (fullPath.IsRegularAssetPath()) {
+            return UpdateTextureAsRegularAssetInEditor(fullPath, m_primaryImageIndex);
+        }
+#endif        
+        
+        
         ImageLoader.GetImageDataInto(fullPath,StreamingImageSequenceConstants.IMAGE_TYPE_FULL,out ImageData imageData);
         if (StreamingImageSequenceConstants.READ_STATUS_SUCCESS != imageData.ReadStatus)
             return false;
@@ -247,11 +258,15 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
         return true;
     }
     
+    
 //----------------------------------------------------------------------------------------------------------------------
 
     internal void ContinuePreloadingImages() {
 
         if (null == m_imageFiles || 0== m_imageFiles.Count)
+            return;
+
+        if (m_folder.IsRegularAssetPath())
             return;
 
         const int NUM_IMAGES = 2;
@@ -311,20 +326,42 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
 
     
 //---------------------------------------------------------------------------------------------------------------------
-    Texture2D UpdateTexture(ImageData readResult, int index) {
-        if (m_texture.IsNullRef()) {
-            m_texture = readResult.CreateCompatibleTexture(HideFlags.DontSaveInBuild | HideFlags.DontSaveInEditor);                    
+    Texture2D UpdateTexture(ImageData imageData, int index) {
+        if (m_texture.IsNullRef() || !imageData.IsTextureCompatible(m_texture)) {
+            m_texture = imageData.CreateCompatibleTexture(HideFlags.DontSaveInBuild | HideFlags.DontSaveInEditor);                    
         }
 
         if (m_lastCopiedImageIndex == index)
             return m_texture;
 
         m_texture.name = "Full: " + m_imageFiles[index].GetName();
-        readResult.CopyBufferToTexture(m_texture);
-        UpdateResolution(ref readResult);                
+        imageData.CopyBufferToTexture(m_texture);
+        UpdateResolution(imageData);                
         m_lastCopiedImageIndex = index;
         return m_texture;
     }
+
+    Texture2D UpdateTexture(Texture2D srcTex, int index) {
+        if (m_texture.IsNullRef() || m_texture.width!=srcTex.width || m_texture.height!=srcTex.height 
+            || m_texture.format!=srcTex.format) 
+        {
+            m_texture = new Texture2D(srcTex.width, srcTex.height, srcTex.format, false, false) {
+                filterMode = FilterMode.Bilinear,
+                hideFlags  = HideFlags.DontSaveInBuild | HideFlags.DontSaveInEditor,
+            };
+        }
+
+        if (m_lastCopiedImageIndex == index)
+            return m_texture;
+        
+        m_texture.name = "Full: " + m_imageFiles[index].GetName();
+        Graphics.CopyTexture(srcTex, /*element=*/ 0, /*mip=*/ 0, m_texture, /*element=*/ 0, /*mip=*/0);
+        UpdateResolution(m_texture) ;
+        m_lastCopiedImageIndex = index;
+        return m_texture;
+        
+    }    
+    
     
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -336,85 +373,8 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
 
     }
 
-//----------------------------------------------------------------------------------------------------------------------
-    //Make sure to set the curve of the TimelineClip 
-    internal void InitTimelineClipCurve(TimelineClip clip) {
-        Assert.IsNotNull(clip);                        
-        bool curveChanged = GetAndValidateAnimationCurve(clip, out AnimationCurve curve);
-        if (curveChanged) {
-            SetTimelineClipCurve(clip, curve);
-        }
-    }
+   
     
-    internal static void ResetTimelineClipCurve(TimelineClip clip) {
-        
-        Assert.IsNotNull(clip);
-        AnimationCurve animationCurve = new AnimationCurve();
-        ValidateAnimationCurve(ref animationCurve, (float) (clip.duration * clip.timeScale));
-        SetTimelineClipCurve(clip, animationCurve);
-        clip.clipIn = 0;
-    }
-
-//----------------------------------------------------------------------------------------------------------------------
-    //Get the animation curve from the TimelineClip.  
-    //Returns:
-    //- true : if the animationCurve of the clip was changed or validated
-    //- false: if the animationCurve was already valid        
-    private static bool GetAndValidateAnimationCurve(TimelineClip clip, out AnimationCurve animationCurve) {
-        
-        //[TODO-sin: 2020-7-30] Support getting animation curve in Runtime
-        animationCurve = null;
-#if UNITY_EDITOR
-        if (clip.curves) {
-            animationCurve = AnimationUtility.GetEditorCurve(clip.curves, m_timelineEditorCurveBinding);
-        } else {            
-            clip.CreateCurves("Curves: " + clip.displayName); //[Note-sin: 2021-2-3] for handling older versions of SIS 
-        }
-#endif        
-        
-        bool newlyCreated = false;
-        if (null == animationCurve) {
-            animationCurve = new AnimationCurve();
-            newlyCreated   = true;
-        }
-
-        bool validated = ValidateAnimationCurve(ref animationCurve, (float) clip.duration);
-        return newlyCreated || validated;
-        
-    }
-
-//----------------------------------------------------------------------------------------------------------------------
-    //Validate: make sure we have at least two keys
-    //Returns:
-    //- true : if the animationCurve was invalid, and has been validated
-    //- false: if the animationCurve was already valid        
-    private static bool ValidateAnimationCurve(ref AnimationCurve animationCurve, float clipDuration) {
-        int numKeys = animationCurve.keys.Length;
-        switch (numKeys) {
-            case 0: {
-                animationCurve = AnimationCurve.Linear(0, 0, clipDuration,1 );
-                break;
-            }
-            case 1: {
-                animationCurve.keys[0] = new Keyframe(0.0f,0.0f);
-                animationCurve.AddKey(clipDuration, 1.0f);
-                break;
-            }
-            default: 
-                return false; 
-        }
-
-        return true;
-    }
-    
-//----------------------------------------------------------------------------------------------------------------------
-
-    private static void SetTimelineClipCurve(TimelineClip clip, AnimationCurve curve) {
-        clip.curves.SetCurve("", typeof(StreamingImageSequencePlayableAsset), "m_time", curve);
-#if UNITY_EDITOR            
-        TimelineEditor.Refresh(RefreshReason.ContentsAddedOrRemoved );
-#endif            
-    }
 
 //----------------------------------------------------------------------------------------------------------------------        
 #region Observer
@@ -468,7 +428,7 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
 #region Unity Editor code
 
 #if UNITY_EDITOR         
-    internal void InitFolder(string folder, List<WatchedFileInfo> imageFiles, ImageDimensionInt res = new ImageDimensionInt()) 
+    internal void InitFolderInEditor(string folder, List<WatchedFileInfo> imageFiles, ImageDimensionInt res = new ImageDimensionInt()) 
     {
         m_folder     = folder;
         m_imageFiles = imageFiles;
@@ -483,13 +443,35 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
         ResetTexture();
         EditorUtility.SetDirty(this);
     }
+
+    protected override void ReloadInternalInEditorV() {
+        m_lastCopiedImageIndex = -1;
+        ResetResolution();
+        RequestLoadImage(m_primaryImageIndex);
+        
+    }        
     
     internal UnityEditor.DefaultAsset GetTimelineDefaultAsset() { return m_timelineDefaultAsset; }
     
     protected override string[] GetSupportedImageFilePatternsV() { return m_imageFilePatterns; }
 
     internal static string[] GetSupportedImageFilePatterns() { return m_imageFilePatterns;}
-    
+
+    internal static EditorCurveBinding GetTimeCurveBinding() { return m_timeCurveBinding; }
+
+
+    private bool UpdateTextureAsRegularAssetInEditor(string fullPath, int imageIndex) {
+        Assert.IsTrue(fullPath.IsRegularAssetPath());
+            
+        
+        Texture2D tex = AssetDatabase.LoadAssetAtPath<Texture2D>(fullPath);
+        Assert.IsNotNull(tex);
+        
+        UpdateTexture(tex, imageIndex);
+        Resources.UnloadAsset(tex);
+        return true;
+        
+    }
     
 #endif //end #if UNITY_EDITOR        
     
@@ -508,7 +490,7 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
 
 #if UNITY_EDITOR
     [SerializeField] private UnityEditor.DefaultAsset m_timelineDefaultAsset = null; //Folder D&D. See notes below
-    private static EditorCurveBinding m_timelineEditorCurveBinding =  
+    private static EditorCurveBinding m_timeCurveBinding =  
         new EditorCurveBinding() {
             path         = "",
             type         = typeof(StreamingImageSequencePlayableAsset),
@@ -517,6 +499,7 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset, I
 
     private static readonly string[] m_imageFilePatterns = {
         "*.png",
+        "*.exr",
         "*.tga"             
     };
     

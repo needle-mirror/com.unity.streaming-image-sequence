@@ -20,7 +20,7 @@ namespace Unity.StreamingImageSequence {
 [TrackBindingType(typeof(StreamingImageSequenceRenderer))]
 [TrackColor(0.776f, 0.263f, 0.09f)]
 [NotKeyable]
-internal class StreamingImageSequenceTrack : BaseTimelineClipSISDataTrack<StreamingImageSequencePlayableAsset> {
+internal class StreamingImageSequenceTrack : FrameMarkerTrack<SISClipData> {
 
 #if UNITY_EDITOR        
     [InitializeOnLoadMethod]
@@ -48,8 +48,9 @@ internal class StreamingImageSequenceTrack : BaseTimelineClipSISDataTrack<Stream
 
     protected override Playable CreateTrackMixerInternal(PlayableGraph graph, GameObject go, int inputCount) {
 
-        InitTrackCurves();
-        
+        DeleteInvalidMarkers();
+        ValidateClipDataCurves();
+                
         var              mixer    = ScriptPlayable<StreamingImageSequencePlayableMixer>.Create(graph, inputCount);
         PlayableDirector director = go.GetComponent<PlayableDirector>();
         m_trackMixer = mixer.GetBehaviour();
@@ -71,24 +72,38 @@ internal class StreamingImageSequenceTrack : BaseTimelineClipSISDataTrack<Stream
         
         return mixer;
     }     
+//----------------------------------------------------------------------------------------------------------------------
 
+    private void ValidateClipDataCurves() {
+        foreach (TimelineClip clip in  GetClips()) {            
+            StreamingImageSequencePlayableAsset sisPlayableAsset = clip.asset as StreamingImageSequencePlayableAsset;
+            Assert.IsNotNull(sisPlayableAsset);
+
+            SISClipData clipData = sisPlayableAsset.GetBoundClipData();
+            Assert.IsNotNull(clipData);
+            AnimationCurve curve = clipData.GetAnimationCurve();
+            if (null != curve)
+                continue;
+            
+            
+#if UNITY_EDITOR 
+            EditorCurveBinding curveBinding = StreamingImageSequencePlayableAsset.GetTimeCurveBinding();
+            curve = AnimationUtility.GetEditorCurve(clip.curves, curveBinding);
+#else
+            Debug.LogWarning("[SIS] ClipData does not have AnimationCurve. Need to resave track: " + name);
+            curve = AnimationCurve.Linear(0f,0f,(float)(clip.duration * clip.timeScale),1f);        
+#endif            
+            clipData.SetAnimationCurve(curve);
+            
+        }        
+    }    
+    
 //----------------------------------------------------------------------------------------------------------------------
 
     /// <inheritdoc/>
     public override string ToString() { return name; }
 
-    internal override SISTrackCaps GetCapsV() { return SISTrackCaps.IMAGE_FOLDER; }
-
-
-//----------------------------------------------------------------------------------------------------------------------
-    private void InitTrackCurves() {
-        //Initialize the curves of TimelineClips       
-        foreach (TimelineClip clip in  GetClips()) {            
-            StreamingImageSequencePlayableAsset sisPlayableAsset = clip.asset as StreamingImageSequencePlayableAsset;
-            Assert.IsNotNull(sisPlayableAsset);
-            sisPlayableAsset.InitTimelineClipCurve(clip);
-        }        
-    }
+    internal override int GetCapsV() { return (int) SISTrackCaps.IMAGE_FOLDER; }
 
 //----------------------------------------------------------------------------------------------------------------------
 

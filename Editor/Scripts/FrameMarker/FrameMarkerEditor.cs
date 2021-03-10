@@ -16,12 +16,13 @@ class FrameMarkerEditor : MarkerEditor {
             return;
 
         SISPlayableFrame playableFrame = marker.GetOwner();
-        //Check invalid PlayableFrame. Perhaps because of unsupported Duplicate operation ?
-        if (null == playableFrame)
+        
+        //Check invalid PlayableFrame/ClipData. Perhaps because of unsupported Duplicate operation ?
+        PlayableFrameClipData clipData = playableFrame?.GetOwner();
+        if (clipData == null)
             return;
         
-        TimelineClipSISData timelineClipSISData = playableFrame.GetOwner();
-        PlayableFramePropertyID inspectedPropertyID = timelineClipSISData.GetInspectedProperty();
+        PlayableFramePropertyID inspectedPropertyID = clipData.GetInspectedProperty();
         switch (inspectedPropertyID) {
             case PlayableFramePropertyID.USED: {
                 
