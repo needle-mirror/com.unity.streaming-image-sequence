@@ -130,11 +130,11 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset<SI
 
 
         {
-            //drop disabled frames            
+            //drop disabled frames
             double scaledTimePerFrame = TimelineUtility.CalculateTimePerFrame(clip) * clip.timeScale;            
       
             //Try to check if this frame is "dropped", so that we should use the image in the prev frame
-            int playableFrameIndex = Mathf.RoundToInt((float) localTime / (float)scaledTimePerFrame);
+            int playableFrameIndex = Mathf.RoundToInt((float) (localTime - clip.clipIn) / (float)scaledTimePerFrame);
             if (playableFrameIndex < 0)
                 return 0;
                 
@@ -188,8 +188,18 @@ internal class StreamingImageSequencePlayableAsset : ImageFolderPlayableAsset<SI
     public sealed override Playable CreatePlayable(PlayableGraph graph, GameObject go) {
         return Playable.Create(graph);
     }
-   
-#endregion    
+
+    public override double duration {
+        get {
+            SISClipData clipData = GetBoundClipData();
+            if (null == clipData)
+                return 0;
+
+            return clipData.CalculateCurveDuration();
+        }
+    }
+
+    #endregion    
     
    
 //----------------------------------------------------------------------------------------------------------------------
