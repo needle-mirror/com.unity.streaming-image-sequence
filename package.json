@@ -2,9 +2,9 @@
   "displayName": "Streaming Image Sequence",
   "name": "com.unity.streaming-image-sequence",
   "unity": "2019.4",
-  "version": "0.12.0-preview",
+  "version": "0.13.0-preview",
   "dependencies": {
-    "com.unity.film-internal-utilities": "0.10.2-preview",
+    "com.unity.film-internal-utilities": "0.11.0-preview",
     "com.unity.editorcoroutines": "1.0.0",
     "com.unity.ext.nunit": "1.0.0",
     "com.unity.modules.animation": "1.0.0",
@@ -21,11 +21,11 @@
     "Toshiyuki Mori <toshiyuki@unity3d.com> (https://github.com/higeometry)"
   ],
   "upmCi": {
-    "footprint": "73ae410d40f8f352124405b28452acf62eb2777b"
+    "footprint": "cc543bfeb7794f78df75f57b4580862ef61cf236"
   },
   "repository": {
     "url": "https://github.com/unity3d-jp/StreamingImageSequence.git",
     "type": "git",
-    "revision": "41b303d93c04e950f65c5b468a97aff355e97d6e"
+    "revision": "bd4de3bd5e3737fb9c1d4626cf3e1f5cc037d2ce"
   }
 }
