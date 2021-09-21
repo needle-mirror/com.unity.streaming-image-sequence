@@ -1,5 +1,7 @@
-## Other Languages
-* [日本語](README_JP.md)
+# Latest official docs
+- [English](https://docs.unity3d.com/Packages/com.unity.streaming-image-sequence@latest)
+- [日本語](https://docs.unity3d.com/ja/Packages/com.unity.streaming-image-sequence@latest)
+
 
 # Streaming Image Sequence
 
@@ -48,15 +50,15 @@ differ based on the version of Unity.
 
 ## Features
 
-1. #### [Playing Sequential Images](./Documentation~/en/FeaturePlayingSequentialImages.md)
+1. #### [Playing Sequential Images](./Documentation~/FeaturePlayingSequentialImages.md)
 
    ![StreamingImageSequenceDemo](Documentation~/images/StreamingImageSequenceDemo.gif)
 
-2. #### [Caching Render Results](./Documentation~/en/FeatureCachingRenderResults.md)
+2. #### [Caching Render Results](./Documentation~/FeatureCachingRenderResults.md)
 
    ![RenderCacheDemo](Documentation~/images/RenderCacheDemo.gif)
 
-3. #### [Fading Image objects](./Documentation~/en/FeatureFadingImages.md)
+3. #### [Fading Image objects](./Documentation~/FeatureFadingImages.md)
 
    ![FaderDemo](Documentation~/images/FaderDemo.gif)
 
