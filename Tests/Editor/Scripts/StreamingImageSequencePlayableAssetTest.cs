@@ -250,8 +250,8 @@ internal class StreamingImageSequencePlayableAssetTest {
 
         //Check if we are back
         Assert.IsTrue(Mathf.Approximately(origFPS, SISPlayableAssetUtility.CalculateFPS(sisAsset)));        
-        Assert.IsTrue(Mathf.Approximately(origDuration,  (float) clip.duration));
         Assert.IsTrue(Mathf.Approximately(origTimeScale, (float) clip.timeScale));
+        Assert.IsTrue(Mathf.Approximately(origDuration,  (float) clip.duration),$"Orig duration {origDuration} != cur clip duration {clip.duration}");
         
         EditorUtilityTest.DestroyTestTimelineAssets(clip);
         yield return null;
@@ -262,21 +262,37 @@ internal class StreamingImageSequencePlayableAssetTest {
         Assert.IsNotNull(sisClipData);
         TimelineClip clip = sisClipData.GetOwner();
         Assert.IsNotNull(clip);
-        
-        
-        float prevFPS           = SISPlayableAssetUtility.CalculateFPS(sisAsset);
-        float prevClipDuration  = (float) clip.duration;
-        float prevTimeScale     = (float) clip.timeScale;        
-        
-        Assert.Greater(prevFPS,0);
-        float fpsMultiplier  = newFPS / prevFPS;
-        Assert.Greater(fpsMultiplier,0);
-        float timeMultiplier = 1.0f / fpsMultiplier;
                 
-        SISPlayableAssetUtility.SetFPS(sisAsset, newFPS);
-        Assert.IsTrue(Mathf.Approximately(prevClipDuration  * timeMultiplier, (float) clip.duration));        
-        Assert.IsTrue(Mathf.Approximately(prevTimeScale * fpsMultiplier, (float) clip.timeScale));
+        SISPlayableAssetEditorUtility.SetFPS(sisAsset, newFPS);
+        float fpsAfterSet = SISPlayableAssetUtility.CalculateFPS(sisAsset);
         
+        Assert.IsTrue(Mathf.Approximately(newFPS,fpsAfterSet));        
+        
+    }
+
+//----------------------------------------------------------------------------------------------------------------------    
+
+    [Test]
+    public void CalculateHalfRoundDown() {
+        //(expectedResult, value to round)
+        (int, double)[] valuesToCheck = new(int, double)[] {
+            (-1, -1),
+            (0, 0), 
+            (0, 0.5), 
+            (1, 0.6), 
+            (3, 3.5),
+            (4, 3.51),
+            (4, 3.6),
+            (4, 4.5),
+            (5, 4.6),
+        };
+        foreach ((int, double) v in valuesToCheck) {
+            VerifyHalfRoundDownResult(v.Item1, v.Item2);            
+        }
+    }
+
+    private void VerifyHalfRoundDownResult(int expectedRoundedVal, double val) {
+        Assert.AreEqual(expectedRoundedVal, StreamingImageSequencePlayableAsset.HalfRoundDown(val));        
     }
 
 //----------------------------------------------------------------------------------------------------------------------    
