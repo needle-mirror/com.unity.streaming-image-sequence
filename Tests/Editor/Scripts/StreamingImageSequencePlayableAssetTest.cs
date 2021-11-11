@@ -2,7 +2,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using System.Reflection;
 using NUnit.Framework;
 using Unity.FilmInternalUtilities;
 using Unity.FilmInternalUtilities.Editor;
@@ -14,7 +13,6 @@ using UnityEngine.TestTools;
 using UnityEngine.Timeline;
 using UnityEditor.Timeline;
 using Object = UnityEngine.Object;
-using UnityEditorReflection = Unity.StreamingImageSequence.Editor.UnityEditorReflection;
 
 namespace Unity.StreamingImageSequence.EditorTests {
 
@@ -27,7 +25,7 @@ internal class StreamingImageSequencePlayableAssetTest {
         TimelineClip clip = TimelineEditorUtility.CreateTrackAndClip<StreamingImageSequenceTrack, StreamingImageSequencePlayableAsset>(
             timelineAsset, "TrackWithEmptyDefaultClip");
 
-        EditorUtilityTest.SelectDirectorInTimelineWindow(director);
+        TimelineEditorUtility.SelectDirectorInTimelineWindow(director);        
 
         StreamingImageSequencePlayableAsset sisAsset = clip.asset as StreamingImageSequencePlayableAsset;
         Assert.IsNotNull(sisAsset);
@@ -37,8 +35,8 @@ internal class StreamingImageSequencePlayableAssetTest {
         director.time = clip.start;
         TimelineEditor.Refresh(RefreshReason.ContentsModified);
         yield return null;        
-        
-        ScriptableObject editorClip = EditorUtilityTest.SelectTimelineClipInInspector(clip);
+
+        ScriptableObject editorClip = TimelineEditorUtility.SelectTimelineClipInInspector(clip);                
         yield return null;        
         
         Object.DestroyImmediate(editorClip);
@@ -299,7 +297,7 @@ internal class StreamingImageSequencePlayableAssetTest {
 
     //Copy the images in SISPlayableAsset to a certain path
     private static string CopySISImagesTo(StreamingImageSequencePlayableAsset sisAsset, string rootPath, string folderName) {
-        string       assetsFolder     = AssetUtility.NormalizeAssetPath(rootPath);
+        string       assetsFolder     = AssetEditorUtility.NormalizePath(rootPath);
         string       destFolderGUID   = AssetDatabase.CreateFolder(assetsFolder, folderName);
         string       destFolder       = AssetDatabase.GUIDToAssetPath(destFolderGUID);
         int          numImages        = sisAsset.GetNumImages();
