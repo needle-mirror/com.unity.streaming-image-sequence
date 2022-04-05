@@ -2,9 +2,9 @@
   "displayName": "Streaming Image Sequence",
   "name": "com.unity.streaming-image-sequence",
   "unity": "2019.4",
-  "version": "0.14.2-preview",
+  "version": "0.15.0-preview",
   "dependencies": {
-    "com.unity.film-internal-utilities": "0.12.2-preview",
+    "com.unity.film-internal-utilities": "0.14.1-preview",
     "com.unity.editorcoroutines": "1.0.0",
     "com.unity.ext.nunit": "1.0.0",
     "com.unity.modules.animation": "1.0.0",
@@ -12,7 +12,7 @@
     "com.unity.modules.imageconversion": "1.0.0",
     "com.unity.modules.particlesystem": "1.0.0",
     "com.unity.ugui": "1.0.0",
-    "com.unity.timeline": "1.2.14"
+    "com.unity.timeline": "1.2.18"
   },
   "description": "Streaming Image Sequence is a package for playing sequential image sequences in Unity Timeline easily without making Unity 2D Sprites.",
   "contributors": [
@@ -20,12 +20,15 @@
     "Sindharta Tanuwijaya <sindharta.tanuwijaya@unity3d.com> (https://github.com/sindharta)",
     "Toshiyuki Mori <toshiyuki@unity3d.com> (https://github.com/higeometry)"
   ],
+  "upm": {
+    "changelog": "### Added\r\n* feat: partial support for Mac Silicon \r\n* feat: add TextureFilterMode property in SISPlayableAsset\r\n\r\n### Changed\r\n* deps: use com.unity.film-internal-utilities@0.14.1-preview\r\n* deps: use com.unity.timeline@1.2.18 \r\n\r\n### Fixed\r\n* fix: remove Scripts~ folder from the distributed package\r\n* fix: PencilLineRenderCapturer did not capture line results correctly"
+  },
   "upmCi": {
-    "footprint": "cfe3bd9357fba009b46d4567307c8c36cbb51532"
+    "footprint": "6fcedb66ed536427b0eae8993176f660eb2bf6bf"
   },
   "repository": {
     "url": "https://github.com/unity3d-jp/StreamingImageSequence.git",
     "type": "git",
-    "revision": "0df75dd97bebf0d28270ea884e85c5716f40e663"
+    "revision": "66b84402b150770267a883d9c8ea5352f27aa0f2"
   }
 }
