@@ -2,9 +2,9 @@
   "displayName": "Streaming Image Sequence",
   "name": "com.unity.streaming-image-sequence",
   "unity": "2019.4",
-  "version": "0.15.2-preview",
+  "version": "0.15.3-preview",
   "dependencies": {
-    "com.unity.film-internal-utilities": "0.14.2-preview",
+    "com.unity.film-internal-utilities": "0.15.1-preview",
     "com.unity.editorcoroutines": "1.0.0",
     "com.unity.ext.nunit": "1.0.6",
     "com.unity.modules.animation": "1.0.0",
@@ -21,14 +21,14 @@
     "Toshiyuki Mori <toshiyuki@unity3d.com> (https://github.com/higeometry)"
   ],
   "_upm": {
-    "changelog": "### Changed\r\n* internal: open internal runtime API to Storyboard"
+    "changelog": "### Changed\n* deps: use com.unity.film-internal-utilities@0.15.1-preview\n\n### Fixed\n* fix: show the invalid output folder (if applicable) when trying to update RenderCache\n* fix: hide the button to update RenderCache if the Director GameObject is not selected"
   },
   "upmCi": {
-    "footprint": "7d24214a578f85be2b1d0df3579f47a98997d5d9"
+    "footprint": "3f6a38a48cb661d01e536531997d816b175d366c"
   },
   "repository": {
     "url": "https://github.com/unity3d-jp/StreamingImageSequence.git",
     "type": "git",
-    "revision": "26ac1d1d6851432f57131af930a6c5bfa26a2e6b"
+    "revision": "fc398ac7cd69f6ff8a6e13bc3ae54e84ece546ab"
   }
 }
