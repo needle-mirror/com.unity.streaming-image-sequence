@@ -3,6 +3,10 @@ using UnityEngine;
 using UnityEngine.Assertions;
 using UnityEngine.UI;
 
+#if UNITY_EDITOR
+using UnityEditor.Timeline;
+#endif
+
 namespace Unity.StreamingImageSequence  {
 
 /// <summary>
@@ -42,6 +46,10 @@ public sealed class StreamingImageSequenceRenderer : MonoBehaviour {
     
     void OnEnable() {
         InitImageComponent();
+        
+#if UNITY_EDITOR
+        TimelineEditor.Refresh(RefreshReason.SceneNeedsUpdate);
+#endif
     }
     
     internal void Init() {
@@ -118,11 +126,14 @@ public sealed class StreamingImageSequenceRenderer : MonoBehaviour {
 
     }
     
-//----------------------------------------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+    internal void SetUseLastImageOnLoad(bool useLastImageOnLoad) {
+        m_useLastImageOnLoad = useLastImageOnLoad;
+    }
+    internal bool ShouldUseLastImageOnLoad() => m_useLastImageOnLoad;
     
-    internal bool ShouldUseLastImageOnLoad() { return m_useLastImageOnLoad; }
-    
-//----------------------------------------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------------------------------------------------------------------------
 
     void InitImageComponent() {
         m_image = GetComponent<Image>();
