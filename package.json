@@ -2,9 +2,9 @@
   "displayName": "Streaming Image Sequence",
   "name": "com.unity.streaming-image-sequence",
   "unity": "2020.3",
-  "version": "0.16.0-preview",
+  "version": "0.16.1-preview",
   "dependencies": {
-    "com.unity.film-internal-utilities": "0.16.0-preview",
+    "com.unity.film-internal-utilities": "0.17.0-preview",
     "com.unity.editorcoroutines": "1.0.0",
     "com.unity.ext.nunit": "1.0.6",
     "com.unity.modules.animation": "1.0.0",
@@ -20,12 +20,16 @@
     "Sindharta Tanuwijaya <sindharta.tanuwijaya@unity3d.com> (https://github.com/sindharta)",
     "Toshiyuki Mori <toshiyuki@unity3d.com> (https://github.com/higeometry)"
   ],
-  "upmCi": {
-    "footprint": "4037ef8735077bbcb889dd7b9aeb467327e9ebf6"
+  "_upm": {
+    "changelog": "### Changed\n* deps: use com.unity.film-internal-utilities@0.17.0-preview"
   },
+  "upmCi": {
+    "footprint": "dece7fb5973a4536c1af36beedd51235b003ef64"
+  },
+  "documentationUrl": "https://docs.unity3d.com/Packages/com.unity.streaming-image-sequence@0.16/manual/index.html",
   "repository": {
     "url": "https://github.com/unity3d-jp/StreamingImageSequence.git",
     "type": "git",
-    "revision": "317457e0f7059ce1a787a07bc0329df9555c4a6f"
+    "revision": "ebb26ae0c01a418156fc3ebc472b718065413d45"
   }
 }
