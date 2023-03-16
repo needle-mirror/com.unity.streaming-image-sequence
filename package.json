@@ -2,7 +2,7 @@
   "displayName": "Streaming Image Sequence",
   "name": "com.unity.streaming-image-sequence",
   "unity": "2020.3",
-  "version": "0.17.0-preview",
+  "version": "0.17.1-preview",
   "dependencies": {
     "com.unity.film-internal-utilities": "0.18.3-preview",
     "com.unity.editorcoroutines": "1.0.0",
@@ -21,15 +21,15 @@
     "Toshiyuki Mori <toshiyuki@unity3d.com> (https://github.com/higeometry)"
   ],
   "_upm": {
-    "changelog": "### Changed\n* deps: use com.unity.film-internal-utilities@0.18.3-preview \n* doc: update minimum supported Unity versions"
+    "changelog": "### Fixed\n* fix: null error when creating StreamingImageSequencePlayableAsset"
   },
   "upmCi": {
-    "footprint": "0933d7370bcab509ae9b28e8cb3770a0a10c4606"
+    "footprint": "0af9aa7b79e68a8487cf6c390de328a3919d41cc"
   },
   "documentationUrl": "https://docs.unity3d.com/Packages/com.unity.streaming-image-sequence@0.17/manual/index.html",
   "repository": {
     "url": "https://github.com/unity3d-jp/StreamingImageSequence.git",
     "type": "git",
-    "revision": "92453af4ef5243734f691bb4f0430d9e3c1c467e"
+    "revision": "2cd31e6c94cabf2f9cc84d8ada5672631996b5e0"
   }
 }
